@@ -1,4 +1,6 @@
 'use client';
+/* Shared with the standalone Vercel client: native navigation and wallet data-URI icons. */
+/* eslint-disable next/no-html-link-for-pages, next/no-img-element */
 import '@/lib/polyfills';
 import {
   useCallback,
@@ -7,8 +9,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
 import {
   ArrowUpRight,
   AudioLines,
@@ -593,13 +593,13 @@ export default function GameApp() {
   return (
     <main className="shell">
       <header className="topbar">
-        <Link className="brand" href="/">
+        <a className="brand" href="/">
           <Hexagon size={30} />
           <span>
             ULTRA<span className="brand-light">PONG</span>
             <sup>●</sup>
           </span>
-        </Link>
+        </a>
         <div className="network">
           <span className="status-dot" /> SOLANA DEVNET{' '}
           <span className="network-divider" /> POWERED BY MAGICBLOCK
@@ -1291,7 +1291,7 @@ export default function GameApp() {
                 onClick={() => connect(w)}
                 disabled={!!busy}
               >
-                <Image src={w.icon} alt="" width={28} height={28} unoptimized />
+                <img src={w.icon} alt="" width={28} height={28} />
                 {w.name}
                 <ArrowUpRight size={18} />
               </button>

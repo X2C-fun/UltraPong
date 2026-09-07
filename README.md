@@ -34,6 +34,14 @@ Session keys are generated in the browser and stored in sessionStorage for recon
 
 ## Development
 
+### Vercel deployment
+
+Vercel uses the checked-in `vercel.json`: framework Vite, build command `npm run build:vercel`, output directory `dist-vercel`. Set the project Root Directory to the directory containing `package.json` and `vercel.json`, then deploy the latest source. Use Node.js 22.x. No frontend environment secrets are required.
+
+The default `npm run build` creates a Cloudflare Worker for Sites and must not be used as Vercel's static output. The separate Vercel build serves the same game directly in the browser, including `physics.wasm` and `idl.json`; it still uses the same deployed Solana program and MagicBlock ER. Invite query strings such as `/?room=...` are preserved. To inspect this build locally, run `npm run build:vercel` and `npx vite preview --config vite.vercel.config.ts --port 4174`.
+
+If an older Vercel deployment shows `404: NOT_FOUND`, redeploy after including these files and verify the project root. A deployment URL remains on its original build until a new deployment is created.
+
 Requires Node 22.13+, Rust, Solana CLI and Anchor 1.0.2. Solana builds and the LiteSVM tests run in Linux/WSL or macOS. No frontend environment secrets are required.
 
 ```sh
