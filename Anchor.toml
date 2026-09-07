@@ -1,0 +1,10 @@
+[toolchain]
+anchor_version = "1.0.2"
+[features]
+resolution = true
+skip-lint = false
+[programs.devnet]
+ultrapong = "37DBNkDoLdAgnKrtQfMYSLF7jUZ1HqQsN8fqNKhVYQkh"
+[provider]
+cluster = "Devnet"
+wallet = "~/.config/solana/id.json"

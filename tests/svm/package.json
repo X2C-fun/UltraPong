@@ -1,0 +1,1 @@
+{"private":true,"type":"module","scripts":{"test":"node escrow.mjs"},"dependencies":{"litesvm":"1.4.1"}}
