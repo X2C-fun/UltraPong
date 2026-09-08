@@ -635,6 +635,22 @@ mod wasm {
 mod tests {
     use super::*;
     #[test]
+    fn maximum_speed_defense_does_not_tunnel_through_any_paddle() {
+        for count in 2..=8 {
+            for player in 0..count {
+                let mut g = Game::new(count, 42, 0, false);
+                g.pause = 0;
+                let wall = g.walls().into_iter().find(|w| w.player == player as i8).unwrap();
+                let center = wall.a.add(wall.b).scale(1, 2);
+                g.balls[0] = Ball { p: center.add(wall.n.scale(7000, Q)), v: wall.n.scale(-MAX_SPEED, Q), wait: 0, last: -1 };
+                g.step();
+                assert_eq!(g.players[player].lives, 2);
+                assert_eq!(g.players[player].hits, 1);
+                assert!(g.balls[0].v.dot(wall.n) > 0);
+            }
+        }
+    }
+    #[test]
     fn countdown_holds_ball_but_allows_paddle_input() {
         let mut g = Game::new(2, 42, 0, true);
         let initial = g.balls[0].p;

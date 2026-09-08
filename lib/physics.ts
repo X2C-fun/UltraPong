@@ -1,3 +1,4 @@
+import { SnapshotBuffer } from './snapshot-buffer';
 export type Vec = { x: number; y: number };
 export type Player = {
   lives: number;
@@ -37,6 +38,22 @@ export type Game = {
 };
 export type Wall = { a: Vec; b: Vec; n: Vec; player: number };
 export type Snapshot = { game: Game; walls: Wall[] };
+export function ballVisualPosition(
+  ball: Ball,
+  walls: Wall[],
+  fraction: number,
+): Vec {
+  let travel = Math.max(0, Math.min(1, fraction));
+  for (const wall of walls) {
+    const distance =
+      ((ball.p.x - wall.a.x) * wall.n.x + (ball.p.y - wall.a.y) * wall.n.y) /
+      100000;
+    const speed = (ball.v.x * wall.n.x + ball.v.y * wall.n.y) / 100000;
+    if (speed < 0)
+      travel = Math.min(travel, Math.max(0, (distance - 1500) / -speed));
+  }
+  return { x: ball.p.x + ball.v.x * travel, y: ball.p.y + ball.v.y * travel };
+}
 // A wall's coordinate can run right-to-left after the camera rotates it to the bottom.
 export function keyboardTarget(
   wall: Wall,
@@ -58,7 +75,9 @@ export function keyboardTarget(
   );
 }
 export function acceptsPaddlePointer(pointerType: string) {
-  return pointerType === 'touch' || pointerType === 'pen';
+  return (
+    pointerType === 'mouse' || pointerType === 'touch' || pointerType === 'pen'
+  );
 }
 export function paddleHalf(game: Game, player: number) {
   const effect = game.effects?.[player];
@@ -94,6 +113,7 @@ type Exports = {
 };
 let modulePromise: Promise<WebAssembly.Module> | undefined;
 export class Physics {
+  readonly networkFrames = new SnapshotBuffer();
   private e: Exports;
   private cached?: Snapshot;
   private constructor(instance: WebAssembly.Instance) {
@@ -115,6 +135,7 @@ export class Physics {
     bots = 254,
     sabotage = true,
   ) {
+    this.networkFrames.clear();
     this.cached = undefined;
     this.e.game_init(count, seed, bots, +sabotage);
     return this.snapshot();

@@ -112,7 +112,8 @@ export default function NetworkActivity({
         <p>
           <b>MagicBlock runs the match.</b> The game account moves to its
           Ephemeral Rollup, where signed paddle inputs and a 20 Hz match clock
-          update the shared physics. Your browser draws and predicts that state.
+          update the shared physics. Your browser buffers confirmed ball motion
+          and predicts your local paddle between updates.
         </p>
         <p>
           <b>The result comes back to Solana.</b> Once the match ends, the final

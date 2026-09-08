@@ -12,7 +12,7 @@
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "format": "oxfmt",
-    "test": "tsx --test scripts/controls.test.ts scripts/settlement.test.ts",
+    "test": "tsx --test scripts/controls.test.ts scripts/settlement.test.ts scripts/network-render.test.ts",
     "security": "node scripts/security-check.mjs",
     "check": "tsc --noEmit && npm run lint && npm run test && npm run security"
   },

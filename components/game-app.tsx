@@ -39,11 +39,29 @@ import NetworkActivity from '@/components/network-activity';
 import { ensureCommitted, isTerminalRace } from '@/lib/settlement';
 import { Physics, COLORS, type Snapshot, type Vec } from '@/lib/physics';
 import * as chain from '@/lib/chain';
+import GameGuide, { type GuidePage } from './game-guide';
 type Mode = 'practice' | 'free' | 'wager';
 export default function GameApp() {
   const [engine, setEngine] = useState<Physics>();
   const [snap, setSnap] = useState<Snapshot>();
   const [mode, setMode] = useState<Mode>('practice');
+  const [guide, setGuide] = useState<GuidePage>();
+  const [setupCost, setSetupCost] = useState<{
+    rent: number;
+    session: number;
+  }>();
+  useEffect(() => {
+    let closed = false;
+    void chain
+      .hostSetupCost()
+      .then((cost) => {
+        if (!closed) setSetupCost(cost);
+      })
+      .catch(() => {});
+    return () => {
+      closed = true;
+    };
+  }, []);
   const [running, setRunning] = useState(false);
   const [name, setName] = useState('PLAYER ONE');
   const [muted, setMuted] = useState(false);
@@ -78,6 +96,13 @@ export default function GameApp() {
     if (showWallets) walletDialog.current?.showModal();
   }, [showWallets]);
   const online = !!roomId;
+  const inviteCode = room ? chain.roomCode(room.nonce.toNumber()) : undefined;
+  useEffect(() => {
+    if (!roomId || !inviteCode) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('room', inviteCode);
+    window.history.replaceState({}, '', url);
+  }, [roomId, inviteCode]);
   const localPlayer =
     online && room && wallet
       ? room.players
@@ -133,12 +158,17 @@ export default function GameApp() {
     const params = new URLSearchParams(window.location.search);
     const value = params.get('room');
     if (value) {
-      try {
-        setRoomId(new PublicKey(value));
-        setMode('free');
-      } catch {
-        setError('That room link is invalid.');
-      }
+      void chain
+        .resolveRoom(value)
+        .then((id) => {
+          if (!disposed) {
+            setRoomId(id);
+            setMode('free');
+          }
+        })
+        .catch((e) => {
+          if (!disposed) setError(e.message);
+        });
     }
     setName(localStorage.getItem('ultrapong.name') || 'PLAYER ONE');
     setMuted(localStorage.getItem('ultrapong.muted') === 'true');
@@ -227,8 +257,11 @@ export default function GameApp() {
         n === 'Connection interrupted. Reconnecting…' ? '' : n,
       );
       engine!.load(m.data);
-      setSnapshotTime(performance.now());
-      setSnap(engine!.snapshot());
+      const received = performance.now();
+      const authoritative = engine!.snapshot();
+      engine!.networkFrames.push(authoritative, received);
+      setSnapshotTime(received);
+      setSnap(authoritative);
       if (localPlayer >= 0) engine!.input(localPlayer, target.current);
     }
     const id = connection.onAccountChange(
@@ -642,6 +675,31 @@ export default function GameApp() {
           )}
         </button>
       </header>
+      <nav className="game-nav" aria-label="Game navigation">
+        <button disabled={online} onClick={leave}>
+          Home
+        </button>
+        <button
+          onClick={() =>
+            arenaPanel.current?.scrollIntoView({ behavior: 'instant' })
+          }
+        >
+          Arena
+        </button>
+        <button onClick={() => setGuide('rules')}>How to play</button>
+        <button onClick={() => setGuide('tutorial')}>Tutorial</button>
+        <button onClick={() => setGuide('network')}>How it works</button>
+        <span className="nav-network">DEVNET · TEST SOL</span>
+      </nav>
+      {guide && (
+        <GameGuide
+          key={guide}
+          page={guide}
+          onClose={() => setGuide(undefined)}
+          onPractice={practice}
+          online={online}
+        />
+      )}
       <div className="workspace">
         <section ref={arenaPanel} className="arena-panel">
           <div className="arena-heading">
@@ -757,7 +815,7 @@ export default function GameApp() {
           </div>
           <div className="arena-footer">
             <span>
-              <span className="keycap">↔</span> A / D or arrow keys{' '}
+              <span className="keycap">↔</span> Mouse · A/D · Arrows{' '}
               <span className="footer-divider" /> Drag on mobile
             </span>
             <div className="footer-actions">
@@ -825,7 +883,13 @@ export default function GameApp() {
             <span className="eyebrow">
               {online ? 'BRING YOUR RIVALS' : 'MAKE YOUR NEXT MOVE'}
             </span>
-            <h2>{online ? 'Same room. New rivals.' : 'One more round.'}</h2>
+            <h2>
+              {online
+                ? 'Match lobby'
+                : active
+                  ? 'Practice session'
+                  : 'Choose your game'}
+            </h2>
             <p>
               {online && room?.wager
                 ? '0.01 Devnet SOL per player. No house fee.'
@@ -851,7 +915,7 @@ export default function GameApp() {
                     icon: Users,
                     title: 'Play with friends',
                     sub: 'One link. Up to eight players.',
-                    tag: 'FREE',
+                    tag: 'NO WAGER',
                   },
                   {
                     id: 'wager' as Mode,
@@ -930,30 +994,41 @@ export default function GameApp() {
                 <p className="fee-note">
                   {mode === 'wager' ? 'Entry: 0.01 Devnet SOL. ' : ''}One
                   approval creates the room, enters you, and marks you ready.
-                  Includes a 0.002 SOL gameplay session; room account costs and
-                  network fees are extra. Starting uses one more approval.
+                  {setupCost ? (
+                    <>
+                      Host setup: ~
+                      {(setupCost.rent + setupCost.session).toFixed(5)} Devnet
+                      SOL ({setupCost.rent.toFixed(5)} account storage + 0.002
+                      session funding).
+                    </>
+                  ) : (
+                    <>
+                      Hosting funds onchain accounts and a 0.002 SOL gameplay
+                      session.
+                    </>
+                  )}{' '}
+                  {mode === 'free' ? 'No wager.' : 'Plus your 0.01 SOL wager.'}{' '}
+                  Network fees and the later delegation transaction are
+                  additional. Account storage is not automatically refunded.
                 </p>
               )}
               {mode !== 'practice' && (
                 <div className="join-input">
                   <input
-                    aria-label="Room address or invite link"
-                    placeholder="Paste a room link"
+                    aria-label="Six-character room code or invite link"
+                    placeholder="Room code, e.g. A7B2C9"
+                    autoCapitalize="characters"
+                    spellCheck={false}
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value)}
                   />
                   <button
-                    onClick={() => {
-                      try {
-                        const raw = joinCode.includes('?')
-                          ? new URL(joinCode).searchParams.get('room')
-                          : joinCode;
-                        selectRoom(new PublicKey(raw || ''));
-                        setError('');
-                      } catch {
-                        setError('Paste a valid UltraPong room link');
-                      }
-                    }}
+                    disabled={!!busy}
+                    onClick={() =>
+                      action('Finding room', async () =>
+                        selectRoom(await chain.resolveRoom(joinCode)),
+                      )
+                    }
                   >
                     Join <ChevronRight size={15} />
                   </button>
@@ -966,17 +1041,39 @@ export default function GameApp() {
               <button
                 className="invite-button"
                 onClick={async () => {
-                  await navigator.clipboard.writeText(location.href);
+                  const code = room && chain.roomCode(room.nonce.toNumber());
+                  await navigator.clipboard.writeText(
+                    location.origin + '/?room=' + (code || roomId.toBase58()),
+                  );
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
               >
                 {copied ? <Check size={16} /> : <Copy size={16} />}{' '}
                 {copied ? 'Invite link copied' : 'Copy invite link'}
-                <span>{chain.short(roomId)}</span>
+                <span className="room-code">
+                  {room
+                    ? chain.roomCode(room.nonce.toNumber()) ||
+                      chain.short(roomId)
+                    : '…'}
+                </span>
               </button>
               {room && (
                 <>
+                  <details className="room-details">
+                    <summary>Room address & alternate invite</summary>
+                    <code>{roomId.toBase58()}</code>
+                    <button
+                      className="text-button"
+                      onClick={() =>
+                        navigator.clipboard.writeText(
+                          location.origin + '/?room=' + roomId.toBase58(),
+                        )
+                      }
+                    >
+                      Copy full invite link
+                    </button>
+                  </details>
                   <div className="room-meta">
                     <span>{room.count} / 8 PLAYERS</span>
                     <span>
@@ -1262,7 +1359,7 @@ export default function GameApp() {
             </div>
           )}
           {notice && <output className="notice">{notice}</output>}
-          {!online && (
+          {!online && !active && (
             <div className="howto">
               <div className="howto-heading">
                 <CircleHelp size={16} />

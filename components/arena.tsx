@@ -7,6 +7,7 @@ import {
   acceptsPaddlePointer,
   paddleHalf,
   visualPaddlePosition,
+  ballVisualPosition,
   type Snapshot,
   type Vec,
   type Wall,
@@ -118,13 +119,15 @@ export default function Arena(props: Props) {
       acc += dt;
       if (p.running) {
         while (acc >= 50) {
-          if (!p.online || now - (p.snapshotTime ?? 0) < 200) {
+          if (!p.online) {
             p.engine.step();
           }
           acc -= 50;
         }
       } else acc = 0;
-      view = p.engine.snapshot();
+      view =
+        (p.online ? p.engine.networkFrames.sample(now) : undefined) ??
+        p.engine.snapshot();
       const { game, walls } = view;
       const rect = el!.getBoundingClientRect(),
         width = rect.width,
@@ -253,7 +256,22 @@ export default function Arena(props: Props) {
       const localState = game.players[p.localPlayer];
       if (localState) {
         const fresh = !p.online || now - (p.snapshotTime ?? 0) < 500;
-        const predicting = fresh && now - localInput.current.time < 500;
+        const nearImpact =
+          p.online &&
+          local &&
+          game.balls.some((b) => {
+            const distance =
+              ((b.p.x - local.a.x) * local.n.x +
+                (b.p.y - local.a.y) * local.n.y) /
+              100000;
+            return (
+              distance < 22000 &&
+              !b.wait &&
+              b.v.x * local.n.x + b.v.y * local.n.y < 0
+            );
+          });
+        const predicting =
+          fresh && !nearImpact && now - localInput.current.time < 500;
         paddlePosition = visualPaddlePosition(
           paddlePosition,
           predicting ? localInput.current.target : localState.pos,
@@ -406,23 +424,43 @@ export default function Arena(props: Props) {
         ctx!.save();
         ctx!.translate(power.p.x, power.p.y);
         ctx!.rotate(-rotation);
-        const pulse = p.reduced ? 1 : 1 + Math.sin(now * 0.006) * 0.1;
-        ctx!.scale(pulse, pulse);
+        // Icons use fixed CSS-pixel geometry, independent of arena scale and fonts.
+        ctx!.scale(1 / scale, 1 / scale);
         ctx!.fillStyle = '#101c2b';
         ctx!.strokeStyle = color;
-        ctx!.lineWidth = 650;
+        ctx!.lineWidth = 1.5;
         ctx!.shadowColor = color;
         ctx!.shadowBlur = p.reduced ? 0 : 14;
         ctx!.beginPath();
-        ctx!.roundRect(-6500, -6500, 13000, 13000, 2000);
+        ctx!.roundRect(-12, -12, 24, 24, 5);
         ctx!.fill();
         ctx!.stroke();
         ctx!.shadowBlur = 0;
         ctx!.fillStyle = color;
-        ctx!.textAlign = 'center';
-        ctx!.textBaseline = 'middle';
-        ctx!.font = 'bold ' + Math.max(6500, 13 / scale) + 'px monospace';
-        ctx!.fillText(['↔', '↦↤', '3×'][power.kind], 0, 0);
+        ctx!.lineWidth = 1.8;
+        ctx!.beginPath();
+        if (power.kind === 2) {
+          for (const [x, y] of [
+            [-5, 4],
+            [5, 4],
+            [0, -5],
+          ]) {
+            ctx!.moveTo(x + 2.5, y);
+            ctx!.arc(x, y, 2.5, 0, Math.PI * 2);
+          }
+          ctx!.fill();
+        } else {
+          ctx!.moveTo(-7, 0);
+          ctx!.lineTo(7, 0);
+          for (const sign of [-1, 1]) {
+            const tip = power.kind === 0 ? sign * 7 : sign * 2;
+            const tail = power.kind === 0 ? sign * 3 : sign * 6;
+            ctx!.moveTo(tail, -4);
+            ctx!.lineTo(tip, 0);
+            ctx!.lineTo(tail, 4);
+          }
+          ctx!.stroke();
+        }
         ctx!.restore();
       }
       sparks = sparks.filter((s) => now - s.born < s.life);
@@ -476,9 +514,9 @@ export default function Arena(props: Props) {
           }
           ctx!.globalAlpha = 1;
         }
-        const f = p.running && !game.pause && !b.wait ? acc / 50 : 0;
-        const bx = b.p.x + b.v.x * f,
-          by = b.p.y + b.v.y * f;
+        const f =
+          !p.online && p.running && !game.pause && !b.wait ? acc / 50 : 0;
+        const { x: bx, y: by } = ballVisualPosition(b, walls, f);
         ctx!.fillStyle = '#fff';
         ctx!.shadowColor = color;
         ctx!.shadowBlur = p.reduced ? 0 : 16;
@@ -624,7 +662,7 @@ export default function Arena(props: Props) {
     <canvas
       ref={canvas}
       className="game-canvas"
-      aria-label="Survival Pong arena. Defend your wall with A/D, arrow keys, or touch sliding. Mouse aims sabotage only."
+      aria-label="Survival Pong arena. Defend your wall with mouse movement, A/D, arrow keys, or touch sliding."
       onPointerMove={position}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);

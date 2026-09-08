@@ -73,8 +73,8 @@ await test('keyboard holds stop at the paddle boundary', async () => {
   }
   assert.equal(snapshot().game.players[0].pos, 1400);
 });
-await test('desktop mouse never moves a paddle; touch and pen do', () => {
-  assert.equal(acceptsPaddlePointer('mouse'), false);
+await test('mouse, touch and pen can move a paddle', () => {
+  assert.equal(acceptsPaddlePointer('mouse'), true);
   assert.equal(acceptsPaddlePointer('touch'), true);
   assert.equal(acceptsPaddlePointer('pen'), true);
   assert.equal(acceptsPaddlePointer(''), false);

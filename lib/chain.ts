@@ -1,4 +1,6 @@
 import './polyfills';
+import { ROOM_CODE_SPACE, roomCode, parseRoomCode } from './room-code';
+export { roomCode } from './room-code';
 import {
   recordActivity,
   actionLabel,
@@ -20,6 +22,7 @@ import {
   BorshInstructionCoder,
   BN,
   type Idl,
+  utils,
 } from '@coral-xyz/anchor';
 import { getWallets } from '@wallet-standard/app';
 import type { Wallet, WalletAccount } from '@wallet-standard/base';
@@ -353,7 +356,18 @@ export async function createRoom(
   sabotage: boolean,
   name: string,
 ) {
-  const nonce = new BN(crypto.getRandomValues(new Uint32Array(1))[0]);
+  let nonceValue: number | undefined;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const value =
+      crypto.getRandomValues(new Uint32Array(1))[0] % ROOM_CODE_SPACE;
+    if (!(await roomsWithCode(roomCode(value)!)).length) {
+      nonceValue = value;
+      break;
+    }
+  }
+  if (nonceValue === undefined)
+    throw Error('Could not reserve a room code. Please retry.');
+  const nonce = new BN(nonceValue);
   const room = newRoomAddress(wallet.publicKey, nonce);
   const a = addresses(room);
   const session = sessionFor(room, wallet.publicKey);
@@ -379,6 +393,48 @@ export async function createRoom(
     await instruction('ready', {}, { payer: wallet.publicKey, room }),
   ]);
   return room;
+}
+async function roomsWithCode(code: string) {
+  const bytes = new BN(parseRoomCode(code)).toArrayLike(Buffer, 'le', 8);
+  return base.getProgramAccounts(PROGRAM, {
+    filters: [
+      { dataSize: 1024 },
+      { memcmp: { offset: 40, bytes: utils.bytes.bs58.encode(bytes) } },
+    ],
+  });
+}
+export async function resolveRoom(value: string): Promise<PublicKey> {
+  const raw = value.trim();
+  const code = raw.includes('://')
+    ? (new URL(raw).searchParams.get('room') ?? '')
+    : raw;
+  if (!/^[a-z0-9]{6}$/i.test(code)) {
+    try {
+      return new PublicKey(code);
+    } catch {
+      throw Error('Enter a 6-character room code or an invite link.');
+    }
+  }
+  const matches = await roomsWithCode(code);
+  // Never choose an arbitrary room if two concurrent creators picked the same code.
+  if (matches.length > 1)
+    throw Error(
+      'This code is ambiguous. Ask the host for the full invite link.',
+    );
+  if (!matches.length)
+    throw Error('Room not found. Check the code with your host.');
+  return matches[0].pubkey;
+}
+export async function hostSetupCost() {
+  const rents = await Promise.all(
+    [1024, 128, 8192].map((size) =>
+      base.getMinimumBalanceForRentExemption(size),
+    ),
+  );
+  return {
+    rent: rents.reduce((sum, rent) => sum + rent, 0) / 1e9,
+    session: 0.002,
+  };
 }
 export async function joinRoom(
   wallet: BrowserWallet,
