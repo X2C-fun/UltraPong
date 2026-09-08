@@ -4,11 +4,13 @@ import { X, ChevronRight, MousePointer2, Shield, Zap } from 'lucide-react';
 export type GuidePage = 'rules' | 'tutorial' | 'network';
 export default function GameGuide({
   page,
+  onPage,
   onClose,
   onPractice,
   online,
 }: {
   page: GuidePage;
+  onPage: (page: GuidePage) => void;
   onClose: () => void;
   onPractice: () => void;
   online: boolean;
@@ -50,7 +52,23 @@ export default function GameGuide({
       >
         <X size={20} />
       </button>
-      <span className="eyebrow">ULTRAPONG FIELD GUIDE</span>
+      <nav className="help-tabs" aria-label="Help topics">
+        <button aria-pressed={page === 'rules'} onClick={() => onPage('rules')}>
+          Rules
+        </button>
+        <button
+          aria-pressed={page === 'tutorial'}
+          onClick={() => onPage('tutorial')}
+        >
+          Tutorial
+        </button>
+        <button
+          aria-pressed={page === 'network'}
+          onClick={() => onPage('network')}
+        >
+          Network
+        </button>
+      </nav>
       <h2 id="guide-title">
         {page === 'network'
           ? 'Behind the match'
