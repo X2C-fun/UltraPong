@@ -1407,3 +1407,126 @@ output.notice {
     gap: 6px;
   }
 }
+
+.game-nav button[aria-current='page'] {
+  background: #202d35;
+  color: var(--lime);
+  border-color: #3b4c40;
+}
+.home-screen {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: clamp(35px, 7vh, 85px) 0 70px;
+}
+.home-screen > .eyebrow {
+  color: #8eaaa1;
+  letter-spacing: 2px;
+}
+.home-screen h1 {
+  font-size: clamp(48px, 7vw, 88px);
+  font-weight: 750;
+  line-height: 1.02;
+  letter-spacing: -4px;
+  margin: 20px 0;
+}
+.home-screen h1 span {
+  color: var(--lime);
+}
+.home-description {
+  max-width: 450px;
+  color: #a1b0c1;
+  font-size: 16px;
+  line-height: 1.75;
+}
+.home-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 38px;
+}
+.home-modes > button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 26px;
+  border: 1px solid #2c3a49;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #192532, #111922);
+  gap: 16px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.home-modes > button:hover {
+  border-color: var(--lime);
+  background: #1d2b35;
+}
+.home-modes > button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.home-modes svg {
+  color: var(--lime);
+}
+.home-modes strong {
+  font-size: 20px;
+  letter-spacing: -0.4px;
+}
+.home-modes span {
+  color: #9badbf;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.home-modes b {
+  color: var(--lime);
+  font: 10px monospace;
+  letter-spacing: 1px;
+  margin-top: auto;
+  padding-top: 10px;
+}
+.home-resume {
+  max-width: 500px;
+  margin-top: 30px;
+  padding: 24px;
+  background: #15212d;
+  border: 1px solid #334956;
+  border-radius: 14px;
+}
+.home-resume h2 {
+  font-size: 22px;
+}
+.home-resume p {
+  color: #a1b0c1;
+  margin: 12px 0;
+  line-height: 1.6;
+}
+.home-resume .text-button {
+  color: #9badbf;
+  margin-top: 15px;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .home-screen {
+    padding: 26px 0 38px;
+  }
+  .home-screen h1 {
+    letter-spacing: -2px;
+  }
+  .home-modes {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 25px;
+  }
+  .home-modes > button {
+    padding: 20px;
+    gap: 10px;
+  }
+  .home-modes strong {
+    font-size: 19px;
+  }
+  .home-modes span br {
+    display: none;
+  }
+}

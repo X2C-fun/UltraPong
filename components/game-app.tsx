@@ -14,7 +14,6 @@ import {
   AudioLines,
   Check,
   ChevronRight,
-  CircleHelp,
   Copy,
   ExternalLink,
   Globe,
@@ -23,7 +22,6 @@ import {
   LogOut,
   RotateCcw,
   Shield,
-  Sparkles,
   Trophy,
   Users,
   VolumeX,
@@ -45,6 +43,7 @@ export default function GameApp() {
   const [engine, setEngine] = useState<Physics>();
   const [snap, setSnap] = useState<Snapshot>();
   const [mode, setMode] = useState<Mode>('practice');
+  const [screen, setScreen] = useState<'home' | 'arena'>('home');
   const [guide, setGuide] = useState<GuidePage>();
   const [setupCost, setSetupCost] = useState<{
     rent: number;
@@ -138,8 +137,8 @@ export default function GameApp() {
       });
   }, []);
   useEffect(() => {
-    if (active) focusArena();
-  }, [active, focusArena]);
+    if (active && screen === 'arena') focusArena();
+  }, [active, screen, focusArena]);
   const countdown = room?.countdown.toNumber()
     ? Math.max(0, room.countdown.toNumber() - Math.floor(clock / 1000))
     : null;
@@ -163,6 +162,7 @@ export default function GameApp() {
         .then((id) => {
           if (!disposed) {
             setRoomId(id);
+            setScreen('arena');
             setMode('free');
           }
         })
@@ -376,6 +376,7 @@ export default function GameApp() {
   }
   const practice = useCallback(() => {
     if (!engine) return;
+    setMode('practice');
     setSnap(
       engine.init(
         8,
@@ -385,6 +386,7 @@ export default function GameApp() {
       ),
     );
     setRunning(true);
+    setScreen('arena');
     focusArena();
     setError('');
     target.current = 5000;
@@ -402,6 +404,7 @@ export default function GameApp() {
     });
   }
   function selectRoom(id: PublicKey) {
+    setScreen('arena');
     setRoomId(id);
     const url = new URL(window.location.href);
     url.searchParams.set('room', id.toBase58());
@@ -538,6 +541,7 @@ export default function GameApp() {
     roundNumber,
   ]);
   function leave() {
+    setScreen('home');
     setRunning(false);
     setRoomId(undefined);
     setRoom(undefined);
@@ -653,10 +657,23 @@ export default function GameApp() {
   }, [engine, sabotage, practice]);
   const winnerName =
     snap && snap.game.winner >= 0 ? names[snap.game.winner] : 'Draw';
+  const home = () => {
+    setGuide(undefined);
+    if (online) setScreen('home');
+    else leave();
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
   return (
     <main className="shell">
       <header className="topbar">
-        <a className="brand" href="/">
+        <a
+          className="brand"
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            home();
+          }}
+        >
           <Hexagon size={30} />
           <span>
             ULTRA<span className="brand-light">PONG</span>
@@ -676,13 +693,15 @@ export default function GameApp() {
         </button>
       </header>
       <nav className="game-nav" aria-label="Game navigation">
-        <button disabled={online} onClick={leave}>
+        <button
+          aria-current={screen === 'home' ? 'page' : undefined}
+          onClick={home}
+        >
           Home
         </button>
         <button
-          onClick={() =>
-            arenaPanel.current?.scrollIntoView({ behavior: 'instant' })
-          }
+          aria-current={screen === 'arena' ? 'page' : undefined}
+          onClick={() => setScreen('arena')}
         >
           Arena
         </button>
@@ -700,689 +719,758 @@ export default function GameApp() {
           online={online}
         />
       )}
-      <div className="workspace">
-        <section ref={arenaPanel} className="arena-panel">
-          <div className="arena-heading">
-            <div>
-              <span className="eyebrow">
-                {active ? 'THE PRESSURE IS ON' : 'THE LAST WALL STANDING'}
-              </span>
-              <h1>
-                {finished
-                  ? snap?.game.winner < 0
-                    ? 'The round is a draw'
-                    : 'One wall remains'
-                  : out
-                    ? 'Time to get even'
-                    : active
-                      ? 'Defend your edge'
-                      : 'Enter the arena'}
-                <span>.</span>
-              </h1>
-            </div>
-            <span className="pill">
-              <span className="status-dot" />
-              {online
-                ? room?.wager
-                  ? 'WAGER ROOM'
-                  : 'FRIENDS ROOM'
-                : 'PRACTICE ARENA'}
-            </span>
-            {!online && running && (
-              <button className="menu-button" onClick={leave}>
-                <LogOut size={15} /> Main menu
-              </button>
-            )}
-          </div>
-          <div className="arena-stage">
-            <div className="arena-grain" />
-            {engine ? (
-              <Arena
-                engine={engine}
-                running={!!active}
-                online={online}
-                localPlayer={localPlayer}
-                names={names}
-                hazard={hazard}
-                muted={muted}
-                reduced={reduced}
-                onSnapshot={online ? () => {} : setSnap}
-                onInput={onInput}
-                onPlace={drop}
-                snapshotTime={snapshotTime}
-              />
-            ) : (
-              <div className="loading-engine">
-                <LoaderCircle className="spin" /> Loading arena…
-              </div>
-            )}
-            {!active && !finished && !online && (
-              <div className="arena-hint">
-                <span>YOUR WALL. YOUR REFLEXES.</span>
-                <span>
-                  Choose a mode to begin <ArrowUpRight size={14} />
-                </span>
-              </div>
-            )}
-            {finished && (
-              <div className="result-overlay">
-                <Trophy size={32} />
-                <span className="eyebrow">
-                  {snap?.game.winner < 0
-                    ? 'ROUND COMPLETE'
-                    : 'LAST WALL STANDING'}
-                </span>
-                <h2>{winnerName}</h2>
-                <p>
-                  {online && room?.wager
-                    ? snap?.game.winner < 0
-                      ? 'Draw — each player can reclaim their stake.'
-                      : escrow?.state === 1
-                        ? 'The entire pot has been paid.'
-                        : 'Payout pending on Solana Devnet.'
-                    : snap?.game.winner === localPlayer
-                      ? 'You held the line.'
-                      : 'Every round is a fresh start.'}
-                </p>
-                {!online && (
-                  <button className="primary-button" onClick={practice}>
-                    Run it back <RotateCcw size={17} />
-                  </button>
-                )}
-              </div>
-            )}
-            <div className="stage-corner">
-              <span>
-                {String(
-                  snap?.game.players.filter((p) => p.lives > 0).length ?? 8,
-                ).padStart(2, '0')}
-              </span>{' '}
-              / {String(snap?.game.players.length ?? 8).padStart(2, '0')} SIDES
-            </div>
-            <div className="stage-coordinate">
-              {online ? 'MAGICBLOCK ER' : 'LOCAL SIMULATION'}{' '}
-              <span>
-                {active && snap
-                  ? Math.floor(snap.game.tick / 1200) +
-                    ':' +
-                    String(Math.floor(snap.game.tick / 20) % 60).padStart(
-                      2,
-                      '0',
-                    )
-                  : 'READY WHEN YOU ARE'}
-              </span>
-            </div>
-          </div>
-          <div className="arena-footer">
-            <span>
-              <span className="keycap">↔</span> Mouse · A/D · Arrows{' '}
-              <span className="footer-divider" /> Drag on mobile
-            </span>
-            <div className="footer-actions">
-              <label title="Reduce glow and ball trails">
-                <input
-                  type="checkbox"
-                  checked={reduced}
-                  onChange={(e) => setReduced(e.target.checked)}
-                />{' '}
-                Less motion
-              </label>
-              <button
-                className="icon-button"
-                aria-label={muted ? 'Unmute sound' : 'Mute sound'}
-                onClick={() => setMuted(!muted)}
-              >
-                {muted ? <VolumeX size={19} /> : <AudioLines size={19} />}
-              </button>
-            </div>
-          </div>
-          {active && snap && (
-            <div className="live-strip">
-              <span>
-                <b>{snap.game.balls.length}</b> BALL
-                {snap.game.balls.length !== 1 ? 'S' : ''}
-              </span>
-              <span>
-                <b>
-                  {localPlayer >= 0
-                    ? (snap.game.players[localPlayer]?.hits ?? 0)
-                    : '—'}
-                </b>{' '}
-                RETURNS
-              </span>
-              <span>
-                {snap.game.tick >= 2400
-                  ? 'ARENA SHRINKING'
-                  : snap.game.balls.length > 1
-                    ? 'TRIPLE BALL'
-                    : 'STAGE ' + (snap.game.generation + 1)}
-              </span>
-            </div>
-          )}
-          {active && (
-            <div className="powerup-legend">
-              <span>HIT A CENTER PICKUP</span>
-              <b>↔ Expand</b>
-              <b>↦↤ Shrink</b>
-              <b>3× Split</b>
-              <small>Last hitter gets the effect · 10s paddle effects</small>
-            </div>
-          )}
-          <NetworkActivity
-            room={roomId?.toBase58()}
-            game={
-              roomId && room
-                ? chain.addresses(roomId, room.round).game.toBase58()
-                : undefined
-            }
-            tick={online ? snap?.game.tick : undefined}
-          />
-        </section>
-        <aside className="control-panel">
-          <div className="panel-intro">
-            <span className="eyebrow">
-              {online ? 'BRING YOUR RIVALS' : 'MAKE YOUR NEXT MOVE'}
-            </span>
-            <h2>
-              {online
-                ? 'Match lobby'
-                : active
-                  ? 'Practice session'
-                  : 'Choose your game'}
-            </h2>
-            <p>
-              {online && room?.wager
-                ? '0.01 Devnet SOL per player. No house fee.'
-                : 'Eight walls. Two lives. One survivor.'}
-            </p>
-          </div>
-          {!online && !running && (
-            <>
-              <div className="mode-label">
-                CHOOSE YOUR MODE <span>01 — 03</span>
-              </div>
-              <div className="mode-list">
-                {[
-                  {
-                    id: 'practice' as Mode,
-                    icon: Zap,
-                    title: 'Warm up',
-                    sub: 'You + 7 bots. No wallet needed.',
-                    tag: 'SOLO',
-                  },
-                  {
-                    id: 'free' as Mode,
-                    icon: Users,
-                    title: 'Play with friends',
-                    sub: 'One link. Up to eight players.',
-                    tag: 'NO WAGER',
-                  },
-                  {
-                    id: 'wager' as Mode,
-                    icon: Shield,
-                    title: 'Winner takes all',
-                    sub: 'Put your reflexes on the line.',
-                    tag: '0.01 SOL',
-                  },
-                ].map((m) => (
-                  <button
-                    key={m.id}
-                    className={'mode-card ' + (mode === m.id ? 'selected' : '')}
-                    onClick={() => chooseMode(m.id)}
-                  >
-                    <m.icon size={22} />
-                    <span>
-                      <strong>{m.title}</strong>
-                      <small>{m.sub}</small>
-                    </span>
-                    <em>{m.tag}</em>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-          {!running && (!online || room?.state === 0) && (
-            <>
-              <label className="field-label" htmlFor="name">
-                YOUR CALLSIGN
-              </label>
-              <input
-                id="name"
-                className="name-input"
-                maxLength={16}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </>
-          )}
-          {!online && !running && (
-            <>
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={sabotage}
-                  onChange={(e) => setSabotage(e.target.checked)}
-                />
-                <span>Sabotage after elimination</span>
-              </label>
+      {screen === 'home' ? (
+        <section className="home-screen" aria-labelledby="home-title">
+          <span className="eyebrow">EIGHT WALLS. ONE SURVIVOR.</span>
+          <h1 id="home-title">
+            Last wall
+            <br />
+            <span>standing.</span>
+          </h1>
+          <p className="home-description">
+            A survival Pong arena for you and your rivals. Defend your edge.
+            Outlast the room.
+          </p>
+          {online ? (
+            <div className="home-resume">
+              <h2>Your room is still open</h2>
+              <p>
+                {active
+                  ? 'Your online match continues. Return to defend your wall.'
+                  : 'Return to your lobby to play with your friends.'}
+              </p>
               <button
                 className="primary-button"
-                disabled={!!busy || !engine}
-                onClick={mode === 'practice' ? practice : create}
+                onClick={() => setScreen('arena')}
               >
-                {busy ||
-                  (mode === 'practice'
-                    ? 'Enter practice'
-                    : wallet
-                      ? mode === 'wager'
-                        ? 'Create & enter · 0.01 SOL'
-                        : 'Create & ready up'
-                      : 'Connect to play')}
-                {busy ? (
-                  <LoaderCircle className="spin" size={19} />
-                ) : (
-                  <ArrowUpRight size={21} />
-                )}
+                Return to arena <ArrowUpRight size={18} />
               </button>
-              <div className="mode-note">
-                <Globe size={14} />
-                {mode === 'practice'
-                  ? 'Jump straight in. Learn by surviving.'
-                  : 'Devnet SOL only · Fees separate from the pot'}
-              </div>
-              {mode !== 'practice' && (
-                <p className="fee-note">
-                  {mode === 'wager' ? 'Entry: 0.01 Devnet SOL. ' : ''}One
-                  approval creates the room, enters you, and marks you ready.
-                  {setupCost ? (
-                    <>
-                      Host setup: ~
-                      {(setupCost.rent + setupCost.session).toFixed(5)} Devnet
-                      SOL ({setupCost.rent.toFixed(5)} account storage + 0.002
-                      session funding).
-                    </>
-                  ) : (
-                    <>
-                      Hosting funds onchain accounts and a 0.002 SOL gameplay
-                      session.
-                    </>
-                  )}{' '}
-                  {mode === 'free' ? 'No wager.' : 'Plus your 0.01 SOL wager.'}{' '}
-                  Network fees and the later delegation transaction are
-                  additional. Account storage is not automatically refunded.
-                </p>
-              )}
-              {mode !== 'practice' && (
-                <div className="join-input">
-                  <input
-                    aria-label="Six-character room code or invite link"
-                    placeholder="Room code, e.g. A7B2C9"
-                    autoCapitalize="characters"
-                    spellCheck={false}
-                    value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value)}
-                  />
-                  <button
-                    disabled={!!busy}
-                    onClick={() =>
-                      action('Finding room', async () =>
-                        selectRoom(await chain.resolveRoom(joinCode)),
-                      )
-                    }
-                  >
-                    Join <ChevronRight size={15} />
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-          {online && roomId && (
-            <>
+              <button className="text-button" onClick={leave}>
+                Leave room
+              </button>
+            </div>
+          ) : (
+            <div className="home-modes">
+              <button disabled={!engine} onClick={practice}>
+                <Zap size={25} />
+                <strong>Warm up</strong>
+                <span>
+                  You and seven bots.
+                  <br />
+                  No wallet needed.
+                </span>
+                <b>PLAY SOLO ↗</b>
+              </button>
               <button
-                className="invite-button"
-                onClick={async () => {
-                  const code = room && chain.roomCode(room.nonce.toNumber());
-                  await navigator.clipboard.writeText(
-                    location.origin + '/?room=' + (code || roomId.toBase58()),
-                  );
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
+                onClick={() => {
+                  chooseMode('free');
+                  setScreen('arena');
                 }}
               >
-                {copied ? <Check size={16} /> : <Copy size={16} />}{' '}
-                {copied ? 'Invite link copied' : 'Copy invite link'}
-                <span className="room-code">
-                  {room
-                    ? chain.roomCode(room.nonce.toNumber()) ||
-                      chain.short(roomId)
-                    : '…'}
+                <Users size={25} />
+                <strong>Play with friends</strong>
+                <span>
+                  Host or join a room.
+                  <br />
+                  No wager. Setup fees apply.
                 </span>
+                <b>OPEN LOBBY ↗</b>
               </button>
-              {room && (
-                <>
-                  <details className="room-details">
-                    <summary>Room address & alternate invite</summary>
-                    <code>{roomId.toBase58()}</code>
+              <button
+                onClick={() => {
+                  chooseMode('wager');
+                  setScreen('arena');
+                }}
+              >
+                <Trophy size={25} />
+                <strong>Winner takes all</strong>
+                <span>
+                  0.01 Devnet SOL per player.
+                  <br />
+                  Last survivor takes the pot.
+                </span>
+                <b>OPEN WAGER LOBBY ↗</b>
+              </button>
+            </div>
+          )}
+          {error && (
+            <p className="error-message" role="alert">
+              {error}
+            </p>
+          )}
+        </section>
+      ) : (
+        <div className="workspace">
+          <section ref={arenaPanel} className="arena-panel">
+            <div className="arena-heading">
+              <div>
+                <span className="eyebrow">
+                  {active ? 'THE PRESSURE IS ON' : 'THE LAST WALL STANDING'}
+                </span>
+                <h1>
+                  {finished
+                    ? snap?.game.winner < 0
+                      ? 'The round is a draw'
+                      : 'One wall remains'
+                    : out
+                      ? 'Time to get even'
+                      : active
+                        ? 'Defend your edge'
+                        : 'Enter the arena'}
+                  <span>.</span>
+                </h1>
+              </div>
+              <span className="pill">
+                <span className="status-dot" />
+                {online
+                  ? room?.wager
+                    ? 'WAGER ROOM'
+                    : 'FRIENDS ROOM'
+                  : 'PRACTICE ARENA'}
+              </span>
+              {!online && running && (
+                <button className="menu-button" onClick={leave}>
+                  <LogOut size={15} /> Main menu
+                </button>
+              )}
+            </div>
+            <div className="arena-stage">
+              <div className="arena-grain" />
+              {engine ? (
+                <Arena
+                  engine={engine}
+                  running={!!active}
+                  online={online}
+                  localPlayer={localPlayer}
+                  names={names}
+                  hazard={hazard}
+                  muted={muted}
+                  reduced={reduced}
+                  onSnapshot={online ? () => {} : setSnap}
+                  onInput={onInput}
+                  onPlace={drop}
+                  snapshotTime={snapshotTime}
+                />
+              ) : (
+                <div className="loading-engine">
+                  <LoaderCircle className="spin" /> Loading arena…
+                </div>
+              )}
+              {!active && !finished && !online && (
+                <div className="arena-hint">
+                  <span>YOUR WALL. YOUR REFLEXES.</span>
+                  <span>
+                    Choose a mode to begin <ArrowUpRight size={14} />
+                  </span>
+                </div>
+              )}
+              {finished && (
+                <div className="result-overlay">
+                  <Trophy size={32} />
+                  <span className="eyebrow">
+                    {snap?.game.winner < 0
+                      ? 'ROUND COMPLETE'
+                      : 'LAST WALL STANDING'}
+                  </span>
+                  <h2>{winnerName}</h2>
+                  <p>
+                    {online && room?.wager
+                      ? snap?.game.winner < 0
+                        ? 'Draw — each player can reclaim their stake.'
+                        : escrow?.state === 1
+                          ? 'The entire pot has been paid.'
+                          : 'Payout pending on Solana Devnet.'
+                      : snap?.game.winner === localPlayer
+                        ? 'You held the line.'
+                        : 'Every round is a fresh start.'}
+                  </p>
+                  {!online && (
+                    <button className="primary-button" onClick={practice}>
+                      Run it back <RotateCcw size={17} />
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="stage-corner">
+                <span>
+                  {String(
+                    snap?.game.players.filter((p) => p.lives > 0).length ?? 8,
+                  ).padStart(2, '0')}
+                </span>{' '}
+                / {String(snap?.game.players.length ?? 8).padStart(2, '0')}{' '}
+                SIDES
+              </div>
+              <div className="stage-coordinate">
+                {online ? 'MAGICBLOCK ER' : 'LOCAL SIMULATION'}{' '}
+                <span>
+                  {active && snap
+                    ? Math.floor(snap.game.tick / 1200) +
+                      ':' +
+                      String(Math.floor(snap.game.tick / 20) % 60).padStart(
+                        2,
+                        '0',
+                      )
+                    : 'READY WHEN YOU ARE'}
+                </span>
+              </div>
+            </div>
+            <div className="arena-footer">
+              <span>
+                <span className="keycap">↔</span> Mouse · A/D · Arrows{' '}
+                <span className="footer-divider" /> Drag on mobile
+              </span>
+              <div className="footer-actions">
+                <label title="Reduce glow and ball trails">
+                  <input
+                    type="checkbox"
+                    checked={reduced}
+                    onChange={(e) => setReduced(e.target.checked)}
+                  />{' '}
+                  Less motion
+                </label>
+                <button
+                  className="icon-button"
+                  aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+                  onClick={() => setMuted(!muted)}
+                >
+                  {muted ? <VolumeX size={19} /> : <AudioLines size={19} />}
+                </button>
+              </div>
+            </div>
+            {active && snap && (
+              <div className="live-strip">
+                <span>
+                  <b>{snap.game.balls.length}</b> BALL
+                  {snap.game.balls.length !== 1 ? 'S' : ''}
+                </span>
+                <span>
+                  <b>
+                    {localPlayer >= 0
+                      ? (snap.game.players[localPlayer]?.hits ?? 0)
+                      : '—'}
+                  </b>{' '}
+                  RETURNS
+                </span>
+                <span>
+                  {snap.game.tick >= 2400
+                    ? 'ARENA SHRINKING'
+                    : snap.game.balls.length > 1
+                      ? 'TRIPLE BALL'
+                      : 'STAGE ' + (snap.game.generation + 1)}
+                </span>
+              </div>
+            )}
+            {active && (
+              <div className="powerup-legend">
+                <span>HIT A CENTER PICKUP</span>
+                <b>↔ Expand</b>
+                <b>↦↤ Shrink</b>
+                <b>3× Split</b>
+                <small>Last hitter gets the effect · 10s paddle effects</small>
+              </div>
+            )}
+            <NetworkActivity
+              room={roomId?.toBase58()}
+              game={
+                roomId && room
+                  ? chain.addresses(roomId, room.round).game.toBase58()
+                  : undefined
+              }
+              tick={online ? snap?.game.tick : undefined}
+            />
+          </section>
+          <aside className="control-panel">
+            <div className="panel-intro">
+              <span className="eyebrow">
+                {online ? 'BRING YOUR RIVALS' : 'MAKE YOUR NEXT MOVE'}
+              </span>
+              <h2>
+                {online
+                  ? 'Match lobby'
+                  : active
+                    ? 'Practice session'
+                    : 'Choose your game'}
+              </h2>
+              <p>
+                {online && room?.wager
+                  ? '0.01 Devnet SOL per player. No house fee.'
+                  : 'Eight walls. Two lives. One survivor.'}
+              </p>
+            </div>
+            {!online && !running && (
+              <>
+                <div className="mode-label">
+                  CHOOSE YOUR MODE <span>01 — 03</span>
+                </div>
+                <div className="mode-list">
+                  {[
+                    {
+                      id: 'practice' as Mode,
+                      icon: Zap,
+                      title: 'Warm up',
+                      sub: 'You + 7 bots. No wallet needed.',
+                      tag: 'SOLO',
+                    },
+                    {
+                      id: 'free' as Mode,
+                      icon: Users,
+                      title: 'Play with friends',
+                      sub: 'One link. Up to eight players.',
+                      tag: 'NO WAGER',
+                    },
+                    {
+                      id: 'wager' as Mode,
+                      icon: Shield,
+                      title: 'Winner takes all',
+                      sub: 'Put your reflexes on the line.',
+                      tag: '0.01 SOL',
+                    },
+                  ].map((m) => (
                     <button
-                      className="text-button"
+                      key={m.id}
+                      className={
+                        'mode-card ' + (mode === m.id ? 'selected' : '')
+                      }
+                      onClick={() => chooseMode(m.id)}
+                    >
+                      <m.icon size={22} />
+                      <span>
+                        <strong>{m.title}</strong>
+                        <small>{m.sub}</small>
+                      </span>
+                      <em>{m.tag}</em>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {!running && (!online || room?.state === 0) && (
+              <>
+                <label className="field-label" htmlFor="name">
+                  YOUR CALLSIGN
+                </label>
+                <input
+                  id="name"
+                  className="name-input"
+                  maxLength={16}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </>
+            )}
+            {!online && !running && (
+              <>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={sabotage}
+                    onChange={(e) => setSabotage(e.target.checked)}
+                  />
+                  <span>Sabotage after elimination</span>
+                </label>
+                <button
+                  className="primary-button"
+                  disabled={!!busy || !engine}
+                  onClick={mode === 'practice' ? practice : create}
+                >
+                  {busy ||
+                    (mode === 'practice'
+                      ? 'Enter practice'
+                      : wallet
+                        ? mode === 'wager'
+                          ? 'Create & enter · 0.01 SOL'
+                          : 'Create & ready up'
+                        : 'Connect to play')}
+                  {busy ? (
+                    <LoaderCircle className="spin" size={19} />
+                  ) : (
+                    <ArrowUpRight size={21} />
+                  )}
+                </button>
+                <div className="mode-note">
+                  <Globe size={14} />
+                  {mode === 'practice'
+                    ? 'Jump straight in. Learn by surviving.'
+                    : 'Devnet SOL only · Fees separate from the pot'}
+                </div>
+                {mode !== 'practice' && (
+                  <p className="fee-note">
+                    {mode === 'wager' ? 'Entry: 0.01 Devnet SOL. ' : ''}One
+                    approval creates the room, enters you, and marks you ready.
+                    {setupCost ? (
+                      <>
+                        Host setup: ~
+                        {(setupCost.rent + setupCost.session).toFixed(5)} Devnet
+                        SOL ({setupCost.rent.toFixed(5)} account storage + 0.002
+                        session funding).
+                      </>
+                    ) : (
+                      <>
+                        Hosting funds onchain accounts and a 0.002 SOL gameplay
+                        session.
+                      </>
+                    )}{' '}
+                    {mode === 'free'
+                      ? 'No wager.'
+                      : 'Plus your 0.01 SOL wager.'}{' '}
+                    Network fees and the later delegation transaction are
+                    additional. Account storage is not automatically refunded.
+                  </p>
+                )}
+                {mode !== 'practice' && (
+                  <div className="join-input">
+                    <input
+                      aria-label="Six-character room code or invite link"
+                      placeholder="Room code, e.g. A7B2C9"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value)}
+                    />
+                    <button
+                      disabled={!!busy}
                       onClick={() =>
-                        navigator.clipboard.writeText(
-                          location.origin + '/?room=' + roomId.toBase58(),
+                        action('Finding room', async () =>
+                          selectRoom(await chain.resolveRoom(joinCode)),
                         )
                       }
                     >
-                      Copy full invite link
+                      Join <ChevronRight size={15} />
                     </button>
-                  </details>
-                  <div className="room-meta">
-                    <span>{room.count} / 8 PLAYERS</span>
-                    <span>
-                      {room.sabotage ? 'SABOTAGE ON' : 'SABOTAGE OFF'}
-                    </span>
                   </div>
-                  <div className="roster">
-                    {Array.from(
-                      { length: room.wager ? Math.max(2, room.count) : 8 },
-                      (_, i) => (
-                        <div
-                          key={i}
-                          className={
-                            'roster-row ' + (i === localPlayer ? 'is-you' : '')
-                          }
-                        >
-                          <span
-                            className="player-orb"
-                            style={{ background: COLORS[i] }}
-                          />
-                          <span>
-                            {i < room.count
-                              ? chain.playerName(room, i)
-                              : room.wager
-                                ? 'Waiting for rival…'
-                                : 'BOT ' + String(i + 1).padStart(2, '0')}
-                          </span>
-                          <small>
-                            {i < room.count
-                              ? room.state === 0
-                                ? room.ready[i]
-                                  ? 'READY'
-                                  : 'JOINED'
-                                : (snap?.game.players[i]?.lives ?? 0) > 0
-                                  ? '◆'.repeat(snap!.game.players[i].lives)
-                                  : 'OUT'
-                              : room.wager
-                                ? '—'
-                                : room.state === 0
-                                  ? 'FILL SEAT'
+                )}
+              </>
+            )}
+            {online && roomId && (
+              <>
+                <button
+                  className="invite-button"
+                  onClick={async () => {
+                    const code = room && chain.roomCode(room.nonce.toNumber());
+                    await navigator.clipboard.writeText(
+                      location.origin + '/?room=' + (code || roomId.toBase58()),
+                    );
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                >
+                  {copied ? <Check size={16} /> : <Copy size={16} />}{' '}
+                  {copied ? 'Invite link copied' : 'Copy invite link'}
+                  <span className="room-code">
+                    {room
+                      ? chain.roomCode(room.nonce.toNumber()) ||
+                        chain.short(roomId)
+                      : '…'}
+                  </span>
+                </button>
+                {room && (
+                  <>
+                    <details className="room-details">
+                      <summary>Room address & alternate invite</summary>
+                      <code>{roomId.toBase58()}</code>
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          navigator.clipboard.writeText(
+                            location.origin + '/?room=' + roomId.toBase58(),
+                          )
+                        }
+                      >
+                        Copy full invite link
+                      </button>
+                    </details>
+                    <div className="room-meta">
+                      <span>{room.count} / 8 PLAYERS</span>
+                      <span>
+                        {room.sabotage ? 'SABOTAGE ON' : 'SABOTAGE OFF'}
+                      </span>
+                    </div>
+                    <div className="roster">
+                      {Array.from(
+                        { length: room.wager ? Math.max(2, room.count) : 8 },
+                        (_, i) => (
+                          <div
+                            key={i}
+                            className={
+                              'roster-row ' +
+                              (i === localPlayer ? 'is-you' : '')
+                            }
+                          >
+                            <span
+                              className="player-orb"
+                              style={{ background: COLORS[i] }}
+                            />
+                            <span>
+                              {i < room.count
+                                ? chain.playerName(room, i)
+                                : room.wager
+                                  ? 'Waiting for rival…'
+                                  : 'BOT ' + String(i + 1).padStart(2, '0')}
+                            </span>
+                            <small>
+                              {i < room.count
+                                ? room.state === 0
+                                  ? room.ready[i]
+                                    ? 'READY'
+                                    : 'JOINED'
                                   : (snap?.game.players[i]?.lives ?? 0) > 0
                                     ? '◆'.repeat(snap!.game.players[i].lives)
-                                    : 'OUT'}
-                          </small>
-                        </div>
-                      ),
-                    )}
-                  </div>
-                  {room.wager && (
-                    <div className="pot-display">
-                      <span>WINNER TAKES ALL</span>
-                      <strong>
-                        {(room.count * 0.01).toFixed(2)}{' '}
-                        <small>DEVNET SOL</small>
-                      </strong>
+                                    : 'OUT'
+                                : room.wager
+                                  ? '—'
+                                  : room.state === 0
+                                    ? 'FILL SEAT'
+                                    : (snap?.game.players[i]?.lives ?? 0) > 0
+                                      ? '◆'.repeat(snap!.game.players[i].lives)
+                                      : 'OUT'}
+                            </small>
+                          </div>
+                        ),
+                      )}
                     </div>
-                  )}
-                  {room.state === 0 && localPlayer < 0 && (
-                    <>
-                      <p className="fee-note">
-                        {room.wager ? 'Entry: 0.01 Devnet SOL. ' : ''}Joining
-                        funds a 0.002 SOL gameplay session. Network fees are
-                        additional.
-                      </p>
+                    {room.wager && (
+                      <div className="pot-display">
+                        <span>WINNER TAKES ALL</span>
+                        <strong>
+                          {(room.count * 0.01).toFixed(2)}{' '}
+                          <small>DEVNET SOL</small>
+                        </strong>
+                      </div>
+                    )}
+                    {room.state === 0 && localPlayer < 0 && (
+                      <>
+                        <p className="fee-note">
+                          {room.wager ? 'Entry: 0.01 Devnet SOL. ' : ''}Joining
+                          funds a 0.002 SOL gameplay session. Network fees are
+                          additional.
+                        </p>
+                        <button
+                          className="primary-button"
+                          disabled={!!busy || room.count >= 8}
+                          onClick={join}
+                        >
+                          {busy ||
+                            (wallet
+                              ? room.wager
+                                ? 'Join & ready · 0.01 SOL'
+                                : 'Join & ready up'
+                              : 'Connect wallet to join')}
+                          <ArrowUpRight size={19} />
+                        </button>
+                      </>
+                    )}
+                    {room.state === 0 && localPlayer >= 0 && (
+                      <>
+                        {!room.ready[localPlayer] ? (
+                          <button
+                            className="primary-button"
+                            disabled={!!busy}
+                            onClick={ready}
+                          >
+                            {busy || 'Ready up'}
+                            <Check size={19} />
+                          </button>
+                        ) : (
+                          <button
+                            className="primary-button"
+                            disabled={!!busy || countdown !== 0}
+                            onClick={launch}
+                          >
+                            {busy ||
+                              (countdown === null
+                                ? 'Waiting for players'
+                                : countdown > 0
+                                  ? 'Starting in ' + countdown + '…'
+                                  : 'Launch match')}
+                            <Zap size={19} />
+                          </button>
+                        )}
+                        <button
+                          className="text-button"
+                          disabled={!!busy}
+                          onClick={() =>
+                            action('Withdrawing', async () => {
+                              await chain.withdrawRoom(wallet!, roomId);
+                              await refresh();
+                            })
+                          }
+                        >
+                          Leave lobby{room.wager ? ' & refund entry' : ''}
+                        </button>
+                      </>
+                    )}
+                    {room.state === 1 && !match && localPlayer >= 0 && (
                       <button
                         className="primary-button"
-                        disabled={!!busy || room.count >= 8}
-                        onClick={join}
+                        disabled={!!busy}
+                        onClick={launch}
                       >
-                        {busy ||
-                          (wallet
-                            ? room.wager
-                              ? 'Join & ready · 0.01 SOL'
-                              : 'Join & ready up'
-                            : 'Connect wallet to join')}
+                        {busy || 'Connect to match'}
+                        <Zap size={19} />
+                      </button>
+                    )}
+                    {room.state === 1 && localPlayer < 0 && (
+                      <div className="spectator-note">
+                        This round has started. Watch it out and join the next
+                        one.
+                      </div>
+                    )}
+                    {room.state === 1 &&
+                      match?.status === 1 &&
+                      localPlayer >= 0 && (
+                        <button
+                          className="text-button"
+                          disabled={!!busy}
+                          onClick={recoverSession}
+                        >
+                          Reconnect paddle
+                        </button>
+                      )}
+                    {finished && room.state === 1 && (
+                      <button
+                        className="primary-button"
+                        disabled={!!busy}
+                        onClick={payout}
+                      >
+                        {busy || 'Retry settlement'}
                         <ArrowUpRight size={19} />
                       </button>
-                    </>
-                  )}
-                  {room.state === 0 && localPlayer >= 0 && (
-                    <>
-                      {!room.ready[localPlayer] ? (
+                    )}
+                    {settlement && (
+                      <a
+                        className="receipt"
+                        href={chain.receipt(settlement)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View settlement receipt <ExternalLink size={14} />
+                      </a>
+                    )}
+                    {localPlayer >= 0 &&
+                      escrow &&
+                      escrow.state !== 1 &&
+                      (room.state === 3 ||
+                        (escrow.deadline.toNumber() > 0 &&
+                          clock / 1000 >= escrow.deadline.toNumber())) &&
+                      !escrow.refunded[localPlayer] && (
                         <button
                           className="primary-button"
                           disabled={!!busy}
-                          onClick={ready}
+                          onClick={() =>
+                            action('Refunding entry', async () => {
+                              await chain.sendWallet(wallet!, [
+                                await chain.instruction(
+                                  'refund',
+                                  {},
+                                  {
+                                    payer: wallet!.publicKey,
+                                    ...chain.addresses(roomId),
+                                  },
+                                ),
+                              ]);
+                              await refresh();
+                            })
+                          }
                         >
-                          {busy || 'Ready up'}
-                          <Check size={19} />
-                        </button>
-                      ) : (
-                        <button
-                          className="primary-button"
-                          disabled={!!busy || countdown !== 0}
-                          onClick={launch}
-                        >
-                          {busy ||
-                            (countdown === null
-                              ? 'Waiting for players'
-                              : countdown > 0
-                                ? 'Starting in ' + countdown + '…'
-                                : 'Launch match')}
-                          <Zap size={19} />
+                          {busy || 'Reclaim your stake'}
+                          <ArrowUpRight size={19} />
                         </button>
                       )}
-                      <button
-                        className="text-button"
-                        disabled={!!busy}
-                        onClick={() =>
-                          action('Withdrawing', async () => {
-                            await chain.withdrawRoom(wallet!, roomId);
-                            await refresh();
-                          })
-                        }
-                      >
-                        Leave lobby{room.wager ? ' & refund entry' : ''}
-                      </button>
-                    </>
-                  )}
-                  {room.state === 1 && !match && localPlayer >= 0 && (
-                    <button
-                      className="primary-button"
-                      disabled={!!busy}
-                      onClick={launch}
-                    >
-                      {busy || 'Connect to match'}
-                      <Zap size={19} />
-                    </button>
-                  )}
-                  {room.state === 1 && localPlayer < 0 && (
-                    <div className="spectator-note">
-                      This round has started. Watch it out and join the next
-                      one.
-                    </div>
-                  )}
-                  {room.state === 1 &&
-                    match?.status === 1 &&
-                    localPlayer >= 0 && (
-                      <button
-                        className="text-button"
-                        disabled={!!busy}
-                        onClick={recoverSession}
-                      >
-                        Reconnect paddle
-                      </button>
-                    )}
-                  {finished && room.state === 1 && (
-                    <button
-                      className="primary-button"
-                      disabled={!!busy}
-                      onClick={payout}
-                    >
-                      {busy || 'Retry settlement'}
-                      <ArrowUpRight size={19} />
-                    </button>
-                  )}
-                  {settlement && (
-                    <a
-                      className="receipt"
-                      href={chain.receipt(settlement)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      View settlement receipt <ExternalLink size={14} />
-                    </a>
-                  )}
-                  {localPlayer >= 0 &&
-                    escrow &&
-                    escrow.state !== 1 &&
-                    (room.state === 3 ||
-                      (escrow.deadline.toNumber() > 0 &&
-                        clock / 1000 >= escrow.deadline.toNumber())) &&
-                    !escrow.refunded[localPlayer] && (
+                    {room.state >= 2 && escrow?.total.isZero() && (
                       <button
                         className="primary-button"
-                        disabled={!!busy}
+                        disabled={!!busy || !wallet}
                         onClick={() =>
-                          action('Refunding entry', async () => {
+                          action('Creating next round', async () => {
                             await chain.sendWallet(wallet!, [
                               await chain.instruction(
-                                'refund',
+                                'next_round',
                                 {},
                                 {
                                   payer: wallet!.publicKey,
-                                  ...chain.addresses(roomId),
+                                  ...chain.addresses(
+                                    roomId,
+                                    room.round.addn(1),
+                                  ),
                                 },
                               ),
                             ]);
+                            setMatch(undefined);
+                            setSettlement('');
+                            if (engine) setSnap(engine.init(8, 8429, 255));
                             await refresh();
                           })
                         }
                       >
-                        {busy || 'Reclaim your stake'}
-                        <ArrowUpRight size={19} />
+                        {busy || 'Run it back'}
+                        <RotateCcw size={17} />
                       </button>
                     )}
-                  {room.state >= 2 && escrow?.total.isZero() && (
-                    <button
-                      className="primary-button"
-                      disabled={!!busy || !wallet}
-                      onClick={() =>
-                        action('Creating next round', async () => {
-                          await chain.sendWallet(wallet!, [
-                            await chain.instruction(
-                              'next_round',
-                              {},
-                              {
-                                payer: wallet!.publicKey,
-                                ...chain.addresses(roomId, room.round.addn(1)),
-                              },
-                            ),
-                          ]);
-                          setMatch(undefined);
-                          setSettlement('');
-                          if (engine) setSnap(engine.init(8, 8429, 255));
-                          await refresh();
-                        })
-                      }
-                    >
-                      {busy || 'Run it back'}
-                      <RotateCcw size={17} />
-                    </button>
-                  )}
-                </>
-              )}
-            </>
-          )}
-          {(running || online) && (
-            <>
-              {out && sabotage && !finished && (
-                <div className="hazard-panel">
-                  <div className="mode-label">YOU’RE OUT. GET EVEN.</div>
-                  <p>Pick a hazard, then tap inside the arena.</p>
-                  <div className="hazard-buttons">
-                    {['PEG', 'WELL', 'SPIN'].map((h, i) => (
-                      <button
-                        key={h}
-                        className={hazard === i ? 'selected' : ''}
-                        onClick={() => setHazard(i)}
-                      >
-                        <span>{['⬡', '◎', '╱'][i]}</span>
-                        {h}
-                      </button>
-                    ))}
+                  </>
+                )}
+              </>
+            )}
+            {(running || online) && (
+              <>
+                {out && sabotage && !finished && (
+                  <div className="hazard-panel">
+                    <div className="mode-label">YOU’RE OUT. GET EVEN.</div>
+                    <p>Pick a hazard, then tap inside the arena.</p>
+                    <div className="hazard-buttons">
+                      {['PEG', 'WELL', 'SPIN'].map((h, i) => (
+                        <button
+                          key={h}
+                          className={hazard === i ? 'selected' : ''}
+                          onClick={() => setHazard(i)}
+                        >
+                          <span>{['⬡', '◎', '╱'][i]}</span>
+                          {h}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="cooldown">
+                      <span
+                        style={{
+                          width:
+                            100 -
+                            Math.max(
+                              0,
+                              (snap!.game.players[localPlayer].cooldown -
+                                snap!.game.tick) /
+                                160,
+                            ) *
+                              100 +
+                            '%',
+                        }}
+                      />
+                    </div>
+                    <small>
+                      {snap &&
+                      snap.game.players[localPlayer].cooldown > snap.game.tick
+                        ? 'Cooling down…'
+                        : 'Ready to place'}{' '}
+                      · 12 second lifetime
+                    </small>
                   </div>
-                  <div className="cooldown">
-                    <span
-                      style={{
-                        width:
-                          100 -
-                          Math.max(
-                            0,
-                            (snap!.game.players[localPlayer].cooldown -
-                              snap!.game.tick) /
-                              160,
-                          ) *
-                            100 +
-                          '%',
-                      }}
-                    />
-                  </div>
-                  <small>
-                    {snap &&
-                    snap.game.players[localPlayer].cooldown > snap.game.tick
-                      ? 'Cooling down…'
-                      : 'Ready to place'}{' '}
-                    · 12 second lifetime
-                  </small>
-                </div>
-              )}
-              <button className="text-button leave" onClick={leave}>
-                <LogOut size={14} />
-                {online ? 'Leave room' : 'Back to main menu'}
-              </button>
-            </>
-          )}
-          {error && (
-            <div className="error-message" role="alert">
-              <span>{error}</span>
-              <button aria-label="Dismiss error" onClick={() => setError('')}>
-                <X size={14} />
-              </button>
-            </div>
-          )}
-          {notice && <output className="notice">{notice}</output>}
-          {!online && !active && (
-            <div className="howto">
-              <div className="howto-heading">
-                <CircleHelp size={16} />
-                <span>THE SHORT VERSION</span>
+                )}
+                <button className="text-button leave" onClick={leave}>
+                  <LogOut size={14} />
+                  {online ? 'Leave room' : 'Back to main menu'}
+                </button>
+              </>
+            )}
+            {error && (
+              <div className="error-message" role="alert">
+                <span>{error}</span>
+                <button aria-label="Dismiss error" onClick={() => setError('')}>
+                  <X size={14} />
+                </button>
               </div>
-              <p>
-                <b>01</b> Defend your edge. Miss twice and it shatters.
-              </p>
-              <p>
-                <b>02</b> The arena collapses. The pressure builds.
-              </p>
-              <p>
-                <b>03</b> Knocked out? Drop hazards. Get even.
-              </p>
-              <div className="duel-note">
-                <Sparkles size={16} />
-                <span>Last two standing? Settle it with classic Pong.</span>
-                <ChevronRight size={15} />
-              </div>
-            </div>
-          )}
-        </aside>
-      </div>
+            )}
+            {notice && <output className="notice">{notice}</output>}
+          </aside>
+        </div>
+      )}
       <footer className="bottom-bar">
         <span>BUILT FOR RIVALRIES.</span>
         <span className="bottom-right">
