@@ -104,6 +104,17 @@ export default function GameApp() {
   const out =
     !!snap && localPlayer >= 0 && snap.game.players[localPlayer]?.lives === 0;
   const active = online ? match?.status === 1 : running;
+  const arenaPanel = useRef<HTMLElement>(null);
+  const focusArena = useCallback(() => {
+    if (window.matchMedia('(max-width: 800px), (pointer: coarse)').matches)
+      arenaPanel.current?.scrollIntoView({
+        behavior: 'instant',
+        block: 'start',
+      });
+  }, []);
+  useEffect(() => {
+    if (active) focusArena();
+  }, [active, focusArena]);
   const countdown = room?.countdown.toNumber()
     ? Math.max(0, room.countdown.toNumber() - Math.floor(clock / 1000))
     : null;
@@ -209,7 +220,7 @@ export default function GameApp() {
     async function accept(data: Buffer, slot: number) {
       if (closed || slot < sequenceSlot) return;
       const m = await chain.decode<chain.Match>('MatchState', data);
-      if (closed || !m.data.length) return;
+      if (closed || slot < sequenceSlot || !m.data.length) return;
       sequenceSlot = slot;
       setMatch(m);
       setNotice((n) =>
@@ -245,6 +256,7 @@ export default function GameApp() {
     if (!online || match?.status !== 1 || localPlayer < 0 || !session.current)
       return;
     let inFlight = false,
+      confirmationInFlight = false,
       lastTarget = -1,
       lastSent = 0,
       lastConfirmed = 0,
@@ -268,9 +280,25 @@ export default function GameApp() {
             game: chain.addresses(roomId, room.round).game,
           },
         );
-        const confirm = Date.now() - lastConfirmed > 3000;
-        await chain.sendSession(session.current, [ix], confirm);
-        if (confirm) lastConfirmed = Date.now();
+        const signature = await chain.sendSession(session.current, [ix], false);
+        // Check execution independently so slow confirmations cannot stall touch input.
+        if (!confirmationInFlight && Date.now() - lastConfirmed > 3000) {
+          confirmationInFlight = true;
+          lastConfirmed = Date.now();
+          void chain
+            .confirmSession(signature)
+            .catch((e) => {
+              if (!closed && latest.current.match?.status === 1)
+                setNotice(
+                  isTerminalRace(e)
+                    ? 'Round ended. Syncing the final result…'
+                    : 'Paddle input not confirmed. Use Reconnect paddle if movement stops.',
+                );
+            })
+            .finally(() => {
+              confirmationInFlight = false;
+            });
+        }
         lastTarget = value;
         lastSent = Date.now();
         setNotice((n) =>
@@ -324,9 +352,10 @@ export default function GameApp() {
       ),
     );
     setRunning(true);
+    focusArena();
     setError('');
     target.current = 5000;
-  }, [engine, sabotage]);
+  }, [engine, sabotage, focusArena]);
   function openWallets() {
     setWalletOptions(chain.wallets());
     setShowWallets(true);
@@ -387,6 +416,7 @@ export default function GameApp() {
   }
   async function launch() {
     if (!wallet || !roomId || !room) return;
+    focusArena();
     await action('Starting match', async () => {
       if (room.state === 0) await chain.lockRoom(wallet, roomId, room);
       await refresh();
@@ -613,7 +643,7 @@ export default function GameApp() {
         </button>
       </header>
       <div className="workspace">
-        <section className="arena-panel">
+        <section ref={arenaPanel} className="arena-panel">
           <div className="arena-heading">
             <div>
               <span className="eyebrow">

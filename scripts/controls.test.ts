@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import {
   keyboardTarget,
   acceptsPaddlePointer,
+  visualPaddlePosition,
   type Snapshot,
 } from '../lib/physics';
 async function fixture(count: number) {
@@ -77,4 +78,15 @@ await test('desktop mouse never moves a paddle; touch and pen do', () => {
   assert.equal(acceptsPaddlePointer('touch'), true);
   assert.equal(acceptsPaddlePointer('pen'), true);
   assert.equal(acceptsPaddlePointer(''), false);
+});
+await test('local paddle progresses smoothly at 60 Hz despite delayed server positions', () => {
+  let position = 5000;
+  for (let frame = 0; frame < 12; frame++) {
+    const next = visualPaddlePosition(position, 8000, 1400, 1000 / 60);
+    assert.ok(next >= position && next - position <= 234);
+    position = next;
+  }
+  assert.ok(position > 7700);
+  assert.equal(visualPaddlePosition(8500, 9000, 2100, 16), 7900);
+  assert.ok(visualPaddlePosition(position, 5000, 1400, 16) > position - 225);
 });

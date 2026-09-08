@@ -64,6 +64,23 @@ export function paddleHalf(game: Game, player: number) {
   const effect = game.effects?.[player];
   return effect && effect.expires > game.tick ? effect.half : 1400;
 }
+// Presentation only. Match collisions and payouts always use authoritative physics.
+export function visualPaddlePosition(
+  position: number,
+  target: number,
+  half: number,
+  elapsedMs: number,
+) {
+  const goal = Math.max(half, Math.min(10000 - half, target));
+  const step = 14 * Math.max(0, Math.min(elapsedMs, 100));
+  return Math.max(
+    half,
+    Math.min(
+      10000 - half,
+      position + Math.max(-step, Math.min(step, goal - position)),
+    ),
+  );
+}
 type Exports = {
   memory: WebAssembly.Memory;
   game_init: (n: number, s: number, b: number, h: number) => void;
@@ -78,6 +95,7 @@ type Exports = {
 let modulePromise: Promise<WebAssembly.Module> | undefined;
 export class Physics {
   private e: Exports;
+  private cached?: Snapshot;
   private constructor(instance: WebAssembly.Instance) {
     this.e = instance.exports as unknown as Exports;
   }
@@ -97,31 +115,37 @@ export class Physics {
     bots = 254,
     sabotage = true,
   ) {
+    this.cached = undefined;
     this.e.game_init(count, seed, bots, +sabotage);
     return this.snapshot();
   }
   step() {
+    this.cached = undefined;
     this.e.game_step();
   }
   input(player: number, target: number) {
+    this.cached = undefined;
     this.e.game_input(player, Math.round(target));
   }
   place(player: number, kind: number, p: Vec) {
+    this.cached = undefined;
     return !!this.e.game_place(player, kind, Math.round(p.x), Math.round(p.y));
   }
   load(bytes: Uint8Array) {
+    this.cached = undefined;
     const ptr = this.e.game_load_buffer(bytes.length);
     new Uint8Array(this.e.memory.buffer, ptr, bytes.length).set(bytes);
     if (!this.e.game_load()) throw Error('Invalid match snapshot');
   }
   snapshot(): Snapshot {
+    if (this.cached) return this.cached;
     const ptr = this.e.game_snapshot();
     const bytes = new Uint8Array(
       this.e.memory.buffer,
       ptr,
       this.e.game_snapshot_len(),
     );
-    return JSON.parse(new TextDecoder().decode(bytes));
+    return (this.cached = JSON.parse(new TextDecoder().decode(bytes)));
   }
 }
 export const COLORS = [

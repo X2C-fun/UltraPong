@@ -6,6 +6,7 @@ import {
   keyboardTarget,
   acceptsPaddlePointer,
   paddleHalf,
+  visualPaddlePosition,
   type Snapshot,
   type Vec,
   type Wall,
@@ -31,6 +32,7 @@ export default function Arena(props: Props) {
     current.current = props;
   });
   const pointer = useRef<Vec | null>(null);
+  const localInput = useRef({ target: 5000, time: -Infinity });
   const keys = useRef(new Set<string>());
   const frameTransform = useRef({ scale: 1, cx: 0, cy: 0, rotation: 0 });
   useEffect(() => {
@@ -46,6 +48,8 @@ export default function Arena(props: Props) {
     let trails: Vec[][] = [];
     let view = current.current.engine.snapshot();
     let lastEmit = 0;
+    let paddlePosition = 5000;
+    let wasRunning = false;
     let audio: AudioContext | undefined;
     let lastHits = 0;
     let oldWalls: Wall[] = [],
@@ -82,7 +86,10 @@ export default function Arena(props: Props) {
     };
     const resize = () => {
       const rect = el.getBoundingClientRect(),
-        dpr = Math.min(devicePixelRatio, 2);
+        dpr = Math.min(
+          devicePixelRatio,
+          matchMedia('(pointer: coarse)').matches ? 1.5 : 2,
+        );
       el.width = rect.width * dpr;
       el.height = rect.height * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -130,7 +137,10 @@ export default function Arena(props: Props) {
           my = (local.a.y + local.b.y) / 2;
         desiredRotation = Math.PI / 2 - Math.atan2(my, mx);
       }
-      if (game.tick < lastTick) {
+      if (p.running !== wasRunning) {
+        wasRunning = p.running;
+        paddlePosition = game.players[p.localPlayer]?.pos ?? 5000;
+        localInput.current = { target: paddlePosition, time: -Infinity };
         lastLives = [];
         lastPlayerHits = [];
         sparks = [];
@@ -229,16 +239,27 @@ export default function Arena(props: Props) {
           (keys.current.has('arrowright') || keys.current.has('d') ? 1 : 0) -
           (keys.current.has('arrowleft') || keys.current.has('a') ? 1 : 0);
         if (direction && local) {
-          p.onInput(
-            keyboardTarget(
-              local,
-              rotation,
-              game.players[p.localPlayer].target,
-              direction,
-              dt,
-            ),
+          const value = keyboardTarget(
+            local,
+            rotation,
+            localInput.current.target,
+            direction,
+            dt,
           );
+          localInput.current = { target: value, time: now };
+          p.onInput(value);
         }
+      }
+      const localState = game.players[p.localPlayer];
+      if (localState) {
+        const fresh = !p.online || now - (p.snapshotTime ?? 0) < 500;
+        const predicting = fresh && now - localInput.current.time < 500;
+        paddlePosition = visualPaddlePosition(
+          paddlePosition,
+          predicting ? localInput.current.target : localState.pos,
+          paddleHalf(game, p.localPlayer),
+          dt,
+        );
       }
       ctx!.save();
       ctx!.translate(width / 2, height / 2);
@@ -286,7 +307,8 @@ export default function Arena(props: Props) {
         ctx!.setLineDash([]);
         if (w.player < 0) continue;
         const pl = game.players[w.player];
-        const t = pl.pos / 10000,
+        const t =
+            (w.player === p.localPlayer ? paddlePosition : pl.pos) / 10000,
           half = paddleHalf(game, w.player) / 10000;
         const x1 = w.a.x + (w.b.x - w.a.x) * (t - half),
           y1 = w.a.y + (w.b.y - w.a.y) * (t - half);
@@ -336,12 +358,7 @@ export default function Arena(props: Props) {
         ctx!.strokeStyle = color;
         ctx!.fillStyle = color + '22';
         ctx!.lineWidth = 500;
-        const remaining = (h.expires - game.tick) / 240;
-        ctx!.globalAlpha = Math.min(
-          1,
-          remaining * 4,
-          (game.tick - h.phase + 1) / 8,
-        );
+        ctx!.globalAlpha = Math.min(1, (game.tick - h.phase + 1) / 8);
         if (h.kind === 0) {
           ctx!.beginPath();
           for (let i = 0; i < 6; i++) {
@@ -459,7 +476,7 @@ export default function Arena(props: Props) {
           }
           ctx!.globalAlpha = 1;
         }
-        const f = p.running ? acc / 50 : 0;
+        const f = p.running && !game.pause && !b.wait ? acc / 50 : 0;
         const bx = b.p.x + b.v.x * f,
           by = b.p.y + b.v.y * f;
         ctx!.fillStyle = '#fff';
@@ -516,11 +533,20 @@ export default function Arena(props: Props) {
           game.pause > 0 ? 64 : 35,
         );
       }
-      if (game.pause > 0) {
+      if (p.running && game.pause > 0) {
         ctx!.fillStyle = '#d5dfeb';
         ctx!.textAlign = 'center';
-        ctx!.font = '12px monospace';
-        ctx!.fillText('ARENA COLLAPSING', width / 2, 40);
+        const starting = game.generation === 0 && game.stage_tick === 0;
+        ctx!.font = starting ? 'bold 64px monospace' : '12px monospace';
+        ctx!.fillText(
+          starting ? String(Math.ceil(game.pause / 20)) : 'ARENA COLLAPSING',
+          width / 2,
+          starting ? height / 2 : 40,
+        );
+        if (starting) {
+          ctx!.font = '12px monospace';
+          ctx!.fillText('GET READY', width / 2, height / 2 + 30);
+        }
       }
       const hits = game.players.reduce((n, pl) => n + pl.hits, 0);
       if (hits > lastHits && p.running && !p.muted) {
@@ -580,17 +606,17 @@ export default function Arena(props: Props) {
     ) {
       const dx = wall.b.x - wall.a.x,
         dy = wall.b.y - wall.a.y;
-      current.current.onInput(
-        Math.max(
-          1400,
-          Math.min(
-            8600,
-            (((p.x - wall.a.x) * dx + (p.y - wall.a.y) * dy) /
-              (dx * dx + dy * dy)) *
-              10000,
-          ),
+      const value = Math.max(
+        1400,
+        Math.min(
+          8600,
+          (((p.x - wall.a.x) * dx + (p.y - wall.a.y) * dy) /
+            (dx * dx + dy * dy)) *
+            10000,
         ),
       );
+      localInput.current = { target: value, time: performance.now() };
+      current.current.onInput(value);
     }
     return p;
   }

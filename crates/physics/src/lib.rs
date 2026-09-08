@@ -176,6 +176,9 @@ impl Game {
             });
         }
         g.serve();
+        // Shared by the ER and browser: no ball can move during 3-2-1.
+        g.pause = 60;
+        g.balls[0].wait = 0;
         g
     }
     fn random(&mut self) -> u64 {
@@ -301,7 +304,7 @@ impl Game {
             p,
             kind,
             owner: owner as u8,
-            expires: self.tick + 240,
+            expires: u32::MAX,
             phase: self.tick,
         });
         self.players[owner].cooldown = self.tick + 160;
@@ -315,6 +318,7 @@ impl Game {
     }
     fn rebuild(&mut self) {
         self.generation += 1;
+        self.hazards.clear();
         let alive = self.alive();
         if alive.len() < 2 {
             self.finished = true;
@@ -326,9 +330,6 @@ impl Game {
         self.balls.clear();
         self.serve();
         self.powerups.clear();
-        let walls = self.walls();
-        self.hazards
-            .retain(|h| walls.iter().all(|w| h.p.sub(w.a).dot(w.n) / Q >= 22_000));
     }
     pub fn step(&mut self) {
         if self.finished {
@@ -359,9 +360,6 @@ impl Game {
             return;
         }
         let walls = self.walls();
-        self.hazards.retain(|h| {
-            h.expires > self.tick && walls.iter().all(|w| h.p.sub(w.a).dot(w.n) / Q > 20_000)
-        });
         for i in 0..self.players.len() {
             if self.players[i].bot && self.players[i].lives > 0 && self.tick % 4 == 0 {
                 if let Some(w) = walls.iter().find(|w| w.player == i as i8) {
@@ -407,7 +405,7 @@ impl Game {
                     p,
                     kind,
                     owner: 255,
-                    expires: self.tick + 240,
+                    expires: u32::MAX,
                     phase: self.tick,
                 });
                 self.event = 5;
@@ -637,6 +635,40 @@ mod wasm {
 mod tests {
     use super::*;
     #[test]
+    fn countdown_holds_ball_but_allows_paddle_input() {
+        let mut g = Game::new(2, 42, 0, true);
+        let initial = g.balls[0].p;
+        g.input(0, 8000);
+        for _ in 0..60 {
+            g.step();
+            assert_eq!(g.balls[0].p.x, initial.x);
+            assert_eq!(g.balls[0].p.y, initial.y);
+            assert_eq!(g.stage_tick, 0);
+        }
+        assert_eq!(g.players[0].pos, 8000);
+        assert_eq!(g.pause, 0);
+        g.step();
+        assert!(g.balls[0].p.sub(initial).len() > 0);
+    }
+    #[test]
+    fn obstacles_live_until_elimination_including_final_duel() {
+        let mut g = Game::new(3, 42, 0, true);
+        g.balls[0].wait = 5000;
+        for _ in 0..361 { g.step(); }
+        let first_phase = g.hazards[0].phase;
+        for _ in 0..260 { g.step(); }
+        assert!(g.hazards.iter().any(|h| h.phase == first_phase));
+        g.eliminate(2);
+        assert!(g.hazards.is_empty());
+        g.place(2, 0, V::new(0, 0)).unwrap();
+        g.balls[0].wait = 5000;
+        for _ in 0..260 { g.step(); }
+        assert!(g.hazards.iter().any(|h| h.owner == 2));
+        g.eliminate(1);
+        assert!(g.finished);
+        assert!(g.hazards.is_empty());
+    }
+    #[test]
     fn faster_stages_reset_multiball() {
         let mut g = Game::new(8, 42, 0, true);
         let speed = g.balls[0].v.len();
@@ -672,12 +704,12 @@ mod tests {
     fn central_pickups_and_periodic_obstacles_spawn() {
         let mut g = Game::new(8, 42, 0, true);
         g.balls[0].wait = 5000;
-        for _ in 0..110 {
+        for _ in 0..170 {
             g.step()
         }
         assert_eq!(g.powerups.len(), 1);
         assert!(g.powerups[0].p.len() <= 12000);
-        for _ in 110..361 {
+        for _ in 170..361 {
             g.step()
         }
         assert!(g.hazards.iter().any(|h| h.owner == 255));
@@ -689,6 +721,7 @@ mod tests {
     #[test]
     fn every_real_return_accelerates_ball() {
         let mut g = Game::new(2, 42, 0, true);
+        g.pause = 0;
         g.balls[0] = Ball {
             p: V::new(0, 97000),
             v: V::new(0, 4200),

@@ -1,5 +1,6 @@
 // A short, free Devnet match for watching the read-only activity panel.
 import fs from 'node:fs';
+import assert from 'node:assert/strict';
 import { Keypair } from '@solana/web3.js';
 import {
   base,
@@ -10,6 +11,7 @@ import {
   send,
   account,
   sleep,
+  physics,
 } from './test-utils.mjs';
 import { create, join, activate } from './match-utils.mjs';
 const keys = JSON.parse(fs.readFileSync('scripts/.wallets/integration.json'));
@@ -28,6 +30,12 @@ console.log('Activity room', a.room.toBase58());
 await sleep(12000);
 await activate(a, session);
 console.log('ER clock started');
+const engine = await physics();
+const initial = await account(er, a.game, 'MatchState');
+const start = engine(initial.data).game;
+assert.ok(start.pause > 0 && start.pause <= 60, 'Live ER starts in countdown');
+assert.equal(start.stage_tick, 0);
+console.log('PASS live ER countdown', start.pause, 'ticks remaining');
 let m;
 for (let i = 0; i < 70; i++) {
   m = await account(er, a.game, 'MatchState');

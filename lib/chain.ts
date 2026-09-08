@@ -320,24 +320,30 @@ export async function sendSession(
   const label = describeInstructions(instructions);
   track(signature, er, label, 'submitted');
   if (confirm) {
-    for (let i = 0; i < 50; i++) {
-      const s = (await er.getSignatureStatuses([signature])).value[0];
-      if (s?.err) {
-        track(signature, er, label, 'failed', JSON.stringify(s.err));
-        throw Error('Game transaction failed: ' + JSON.stringify(s.err));
-      }
-      if (
-        s?.confirmationStatus === 'confirmed' ||
-        s?.confirmationStatus === 'finalized'
-      ) {
-        track(signature, er, label, 'confirmed');
-        return signature;
-      }
-      await delay(100);
-    }
-    throw Error('Game transaction confirmation timed out');
+    await confirmSession(signature, label);
   }
   return signature;
+}
+export async function confirmSession(
+  signature: string,
+  label = 'Paddle input',
+) {
+  for (let i = 0; i < 50; i++) {
+    const s = (await er.getSignatureStatuses([signature])).value[0];
+    if (s?.err) {
+      track(signature, er, label, 'failed', JSON.stringify(s.err));
+      throw Error('Game transaction failed: ' + JSON.stringify(s.err));
+    }
+    if (
+      s?.confirmationStatus === 'confirmed' ||
+      s?.confirmationStatus === 'finalized'
+    ) {
+      track(signature, er, label, 'confirmed');
+      return signature;
+    }
+    await delay(100);
+  }
+  throw Error('Game transaction confirmation timed out');
 }
 export const delay = (ms: number) =>
   new Promise<void>((r) => setTimeout(r, ms));
