@@ -84,7 +84,7 @@ export function themeById(id: ThemeId) {
 // Player order follows lib/physics.ts COLORS.
 export const PADDLE_FRAMES = [
   paddleSet('green'),
-  paddleSet('blue (2)', 'blue'),
+  paddleSet('blue'),
   paddleSet('tru purple'),
   paddleSet('pink'),
   paddleSet('red'),
