@@ -19,6 +19,7 @@ import {
   Hexagon,
   LoaderCircle,
   LogOut,
+  Palette,
   RotateCcw,
   Trophy,
   Users,
@@ -34,6 +35,7 @@ import Arena from '@/components/arena';
 import NetworkActivity from '@/components/network-activity';
 import { ensureCommitted, isTerminalRace } from '@/lib/settlement';
 import { Physics, COLORS, type Snapshot, type Vec } from '@/lib/physics';
+import { THEMES, themeById, type ThemeId } from '@/lib/themes';
 import * as chain from '@/lib/chain';
 import GameGuide, { type GuidePage } from './game-guide';
 type Mode = 'practice' | 'free' | 'wager';
@@ -64,6 +66,7 @@ export default function GameApp() {
   const [name, setName] = useState('PLAYER ONE');
   const [muted, setMuted] = useState(false);
   const [reduced, setReduced] = useState(false);
+  const [theme, setTheme] = useState<ThemeId>('default');
   const [sabotage, setSabotage] = useState(true);
   const [hazard, setHazard] = useState(0);
   const [wallet, setWallet] = useState<chain.BrowserWallet>();
@@ -171,6 +174,9 @@ export default function GameApp() {
     }
     setName(localStorage.getItem('ultrapong.name') || 'PLAYER ONE');
     setMuted(localStorage.getItem('ultrapong.muted') === 'true');
+    const savedTheme = localStorage.getItem('ultrapong.theme') as ThemeId | null;
+    if (savedTheme && THEMES.some((option) => option.id === savedTheme))
+      setTheme(savedTheme);
     setReduced(matchMedia('(prefers-reduced-motion: reduce)').matches);
     const timer = setInterval(() => setClock(Date.now()), 1000);
     return () => {
@@ -182,6 +188,9 @@ export default function GameApp() {
   useEffect(() => {
     localStorage.setItem('ultrapong.name', name);
   }, [name]);
+  useEffect(() => {
+    localStorage.setItem('ultrapong.theme', theme);
+  }, [theme]);
   useEffect(() => {
     localStorage.setItem('ultrapong.muted', String(muted));
     const fn = (e: KeyboardEvent) => {
@@ -657,6 +666,7 @@ export default function GameApp() {
   }, [engine, sabotage, practice]);
   const winnerName =
     snap && snap.game.winner >= 0 ? names[snap.game.winner] : 'Draw';
+  const activeTheme = themeById(theme);
   const home = () => {
     setGuide(undefined);
     if (online) setScreen('home');
@@ -821,7 +831,13 @@ export default function GameApp() {
                   </button>
                 )}
               </div>
-              <div className="arena-stage">
+              <div className="arena-stage" data-theme={theme}>
+                {activeTheme.background && (
+                  <div
+                    className="arena-backdrop"
+                    style={{ backgroundImage: `url("${activeTheme.background}")` }}
+                  />
+                )}
                 <div className="arena-grain" />
                 {engine ? (
                   <Arena
@@ -833,6 +849,7 @@ export default function GameApp() {
                     hazard={hazard}
                     muted={muted}
                     reduced={reduced}
+                    theme={theme}
                     onSnapshot={online ? () => {} : setSnap}
                     onInput={onInput}
                     onPlace={drop}
@@ -886,6 +903,23 @@ export default function GameApp() {
                   <span className="footer-divider" /> Drag on mobile
                 </span>
                 <div className="footer-actions">
+                  <label className="theme-picker">
+                    <Palette size={15} aria-hidden="true" />
+                    <span>Theme</span>
+                    <select
+                      aria-label="Arena theme"
+                      value={theme}
+                      onChange={(event) =>
+                        setTheme(event.target.value as ThemeId)
+                      }
+                    >
+                      {THEMES.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label title="Reduce glow and ball trails">
                     <input
                       type="checkbox"

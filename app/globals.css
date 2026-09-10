@@ -163,9 +163,34 @@ h1 > span {
   display: grid;
   place-items: center;
 }
+.arena-stage[data-theme='ocean'],
+.arena-stage[data-theme='underwater'],
+.arena-stage[data-theme='cozy'] {
+  border-color: #6277a2;
+  box-shadow:
+    inset 0 0 70px #14204c55,
+    0 16px 55px #0005;
+}
+.arena-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+.arena-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at center, transparent 32%, #10183624 72%, #08102072),
+    linear-gradient(#17245118, #07112635);
+}
 .arena-grain {
   position: absolute;
   inset: 0;
+  z-index: 0;
   opacity: 0.22;
   background-image: radial-gradient(#576474 0.65px, transparent 0.65px);
   background-size: 20px 20px;
@@ -570,6 +595,29 @@ h1 > span {
   gap: 5px;
   font-size: 11px;
 }
+.theme-picker {
+  padding: 5px 8px;
+  border: 1px solid #344051;
+  border-radius: 6px;
+  background: #131d2a;
+  color: #b5c3d5;
+}
+.theme-picker > svg {
+  color: var(--lime);
+}
+.theme-picker select {
+  max-width: 112px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #e2e9f2;
+  font-size: 11px;
+  cursor: pointer;
+}
+.theme-picker option {
+  background: #131d2a;
+  color: #e2e9f2;
+}
 .toggle-row {
   display: flex;
   gap: 9px;
@@ -929,6 +977,16 @@ h1 > span {
     display: none;
   }
   .footer-actions label {
+    font-size: 10px;
+  }
+  .footer-actions {
+    gap: 7px;
+  }
+  .theme-picker > span {
+    display: none;
+  }
+  .theme-picker select {
+    max-width: 84px;
     font-size: 10px;
   }
   .live-strip {
