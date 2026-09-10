@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 import {
+  ArrowLeft,
   ArrowUpRight,
   AudioLines,
   Check,
@@ -550,6 +551,12 @@ export default function GameApp() {
     roomId,
     roundNumber,
   ]);
+  function backToMenu() {
+    setScreen('home');
+    setError('');
+    setNotice('');
+    setEntry('host');
+  }
   function leave() {
     setScreen('home');
     setRunning(false);
@@ -687,6 +694,7 @@ export default function GameApp() {
   const showHazardDock = out && sabotage && !finished && !!snap && localPlayer >= 0;
   const showSide =
     online || !showArena || !!error || (!!notice && !showHazardDock);
+  const showModeSetup = screen === 'arena' && !showArena && !online && !running;
   return (
     <main className="shell">
       <header className="topbar">
@@ -1027,6 +1035,12 @@ export default function GameApp() {
           )}
           {showSide && (
             <aside className="control-panel">
+              {showModeSetup && (
+                <button className="setup-back" onClick={backToMenu}>
+                  <ArrowLeft size={16} />
+                  Back to menu
+                </button>
+              )}
               {(!showArena || online) && (
                 <div className="panel-intro">
                   <h2>

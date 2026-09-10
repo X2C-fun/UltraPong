@@ -1669,6 +1669,21 @@ output.notice {
   border-radius: 16px;
   background: var(--panel);
 }
+.setup-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #9baac0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.setup-back:hover {
+  color: var(--lime);
+}
 .workspace.solo-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
