@@ -1,12 +1,39 @@
 # UltraPong
 
-An original survival-Pong browser game inspired by SIDE OUT, with shared Rust physics, Solana Devnet escrow, and real MagicBlock Ephemeral Rollup multiplayer.
+**Eight walls. Two lives. One survivor.**
+
+UltraPong is a browser-based survival Pong game. Up to eight players defend their wall in a shrinking arena; the last wall standing wins. The game pairs a React frontend with shared Rust physics and on-chain multiplayer on Solana Devnet via MagicBlock Ephemeral Rollups.
+
+## Overview
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | React 19, TypeScript, Tailwind CSS, Vite / vinext |
+| Physics | Shared Rust engine (`ultrapong-physics`), compiled to WASM for warmup and run on-chain for live matches |
+| On-chain | Anchor program with Solana escrow, room management, and settlement |
+| Multiplayer | MagicBlock Ephemeral Rollup (Asia Devnet) — 20 Hz scheduled ticks, VRF randomness, session-scoped inputs |
+| Deployment | Cloudflare Workers (default build) or Vercel (static client) |
+
+### Game modes
+
+- **Warmup** — One player plus seven bots; no wallet required. Same Rust physics in the browser via WASM.
+- **Friends rooms** — Up to eight wallet-connected players; bots fill empty walls. No wager; the host pays account rent and session funding.
+- **Wager rooms** — Two to eight humans, 0.01 Devnet SOL each, no house fee. The recorded winner receives the entire pot.
+
+### How it works (high level)
+
+1. **Solana** creates the room and escrow. Players join, fund sessions, and ready up through wallet approvals.
+2. **MagicBlock ER** runs the match: the account is delegated, VRF seeds randomness, and an authority-scoped scheduler advances deterministic Rust physics at 20 Hz. Clients submit paddle targets only — never ball positions or winners.
+3. **Browsers** subscribe to the same account, rotate their wall to the bottom, and render with an 80 ms snapshot buffer. Warmup uses the same physics compiled to WASM.
+4. **Settlement** commits the result back to Solana; the program verifies the outcome and pays the recorded winner (or refunds on a draw).
+
+Program: `37DBNkDoLdAgnKrtQfMYSLF7jUZ1HqQsN8fqNKhVYQkh` (Devnet)
+
+Base RPC: `https://rpc.magicblock.app/devnet`  
+ER RPC: `https://devnet-as.magicblock.app`
 
 ## Play
 
-- Warmup: one player and seven bots; no wallet required. Main menu is available above the arena throughout the round.
-- Friends rooms: up to eight wallet-connected players; bots fill empty walls. There is no wager, but hosting pays account storage, session funding and network fees. Current host account sizes are 1,024 + 128 + 8,192 bytes. The menu queries Devnet rent requirements and shows the setup estimate before the wallet opens; delegation costs are additional. Account rent is not automatically returned by the current program.
-- Wager rooms: two to eight humans, 0.01 Devnet SOL each, no house fee. The recorded winner receives the entire pot. Network fees, room-account rent, and the 0.002 SOL session funding are separate.
 - Desktop: mouse movement over the arena, A/D or left/right arrows. Mobile: touch slide. Eliminated players use the pointer to aim sabotage.
 - New rooms use six-character alphanumeric codes, case-insensitive when joining. Codes are base-36 room nonces resolved through a filtered Solana account lookup; no private server or local-only registry is required. Creation checks for existing codes. A rare simultaneous collision fails closed during lookup; the full account invite remains available under Room address & alternate invite. Older full-address links continue to work.
 - Home, Arena, How to play, Tutorial and How it works provide navigation. The tutorial leads into wallet-free warmup; online matches continue while a guide is open.
@@ -14,19 +41,23 @@ An original survival-Pong browser game inspired by SIDE OUT, with shared Rust ph
 - Every match opens with a synchronized three-second countdown; paddles can move while the ball waits. Mobile starts bring the arena into view automatically. Opening serves use 4,200 units per 50 ms tick, increasing by 450 per elimination (serve cap 7,800). Every paddle return adds 6% plus 30 units, capped at 11,500. Later serves have a short half-second warning.
 - Center pickups start five seconds into a stage: expand, shrink, or triple ball. Paddle effects last ten seconds; split balls are capped at three. Neutral bumpers/spinners begin at 18 seconds and recur every 20 seconds. Obstacles and sabotage hazards persist until the next elimination clears them, including the final elimination. Sabotage retains its cooldown and placement limits.
 
-## What runs where
+### Room costs (friends mode)
 
-1. Solana creates the room and escrow. Creating, entering, funding a gameplay session, and readying the host fit in one wallet approval. Joining and readying another player also use one approval. Launching requires one further host approval for delegation.
-2. The match account is delegated to MagicBlock's Asia Devnet ER. Verified randomness seeds the game. An authority-scoped scheduled transaction advances deterministic Rust physics at 20 Hz. Signed session inputs set paddle targets; they never supply ball positions or a winner.
-3. Browsers subscribe to the same account and rotate their wall to the bottom. Online ball motion uses an 80 ms buffer of confirmed snapshots, with no unchecked extrapolation through walls and no speculative browser elimination. Discontinuous serves, bounces and arena changes are not interpolated across. The local paddle responds to recent input and reconciles near incoming collisions, when input stops, or when updates go stale. Input confirmation runs separately from submission. Warmup uses the same Rust physics compiled to WebAssembly. Cached snapshots and capped mobile canvas resolution reduce rendering work. Browser rendering cannot settle a pot; network delay can still affect when an input reaches the ER.
-4. At completion, the result is committed and undelegated back to Solana. The program checks that result and pays the exact recorded winner. Concurrent client finalizers are reconciled against the committed account so a completed payout does not show an ownership error to the loser.
+Hosting pays account storage, session funding, and network fees. Current host account sizes are 1,024 + 128 + 8,192 bytes. The menu queries Devnet rent requirements and shows the setup estimate before the wallet opens; delegation costs are additional. Account rent is not automatically returned by the current program.
+
+## Architecture
+
+```
+Browser (React + WASM)          MagicBlock ER              Solana Devnet
+─────────────────────          ─────────────              ─────────────
+Paddle input  ──────────────►  20 Hz Rust physics  ────►  Room / escrow
+Snapshot subscribe ◄──────────  Match state account       Settlement
+Warmup (local WASM)                                      VRF + delegation
+```
 
 Open **Live network activity** beneath the arena to inspect actual input, scheduled tick, delegation, and settlement signatures. It includes RPC endpoints, account ownership, statuses, slots, and explorer links. It retains the latest 200 observed transactions; multiplayer log subscriptions run while the panel is open. Submission acknowledgement is explicitly distinct from confirmation.
 
-Program: `37DBNkDoLdAgnKrtQfMYSLF7jUZ1HqQsN8fqNKhVYQkh` (Devnet)
-
-Base RPC: `https://rpc.magicblock.app/devnet`  
-ER RPC: `https://devnet-as.magicblock.app`
+Browser rendering cannot settle a pot; network delay can still affect when an input reaches the ER. Online ball motion uses an 80 ms buffer of confirmed snapshots, with no unchecked extrapolation through walls and no speculative browser elimination. Discontinuous serves, bounces and arena changes are not interpolated across. The local paddle responds to recent input and reconciles near incoming collisions, when input stops, or when updates go stale. Input confirmation runs separately from submission. Cached snapshots and capped mobile canvas resolution reduce rendering work. At completion, concurrent client finalizers are reconciled against the committed account so a completed payout does not show an ownership error to the loser.
 
 ## Recovery and authority
 
@@ -36,15 +67,9 @@ Session keys are generated in the browser and stored in sessionStorage for recon
 
 ## Development
 
-### Vercel deployment
+### Prerequisites
 
-Vercel uses the checked-in `vercel.json`: framework Vite, build command `npm run build:vercel`, output directory `dist-vercel`. Set the project Root Directory to the directory containing `package.json` and `vercel.json`, then deploy the latest source. Use Node.js 22.x. No frontend environment secrets are required.
-
-The default `npm run build` creates a Cloudflare Worker for Sites and must not be used as Vercel's static output. The separate Vercel build serves the same game directly in the browser, including `physics.wasm` and `idl.json`; it still uses the same deployed Solana program and MagicBlock ER. Invite query strings such as `/?room=...` are preserved. To inspect this build locally, run `npm run build:vercel` and `npx vite preview --config vite.vercel.config.ts --port 4174`.
-
-If an older Vercel deployment shows `404: NOT_FOUND`, redeploy after including these files and verify the project root. A deployment URL remains on its original build until a new deployment is created.
-
-Requires Node 22.13+, Rust, Solana CLI and Anchor 1.0.2. Solana builds and the LiteSVM tests run in Linux/WSL or macOS. No frontend environment secrets are required.
+Node 22.13+, Rust, Solana CLI, and Anchor 1.0.2. Solana builds and the LiteSVM tests run in Linux/WSL or macOS. No frontend environment secrets are required.
 
 ```sh
 npm ci
@@ -64,6 +89,27 @@ cp target/idl/ultrapong.json public/idl.json
 ```
 
 On a Windows-mounted WSL checkout, set `CARGO_TARGET_DIR` to a Linux directory if SBF tool permissions fail. Copy the resulting WASM from that directory. Deploy with a local signing key only, then update the declared program address and IDL together if deploying a different program. The current deployment supports reading earlier match-state bytes.
+
+### Project structure
+
+```
+UltraPong/
+├── app/                  # Next.js-style pages (vinext)
+├── components/           # React UI and game canvas
+├── lib/                  # Chain client, physics WASM loader, settlement
+├── crates/physics/       # Shared Rust game engine
+├── programs/ultrapong/   # Anchor on-chain program
+├── scripts/              # Tests, integration scripts, security scan
+└── tests/svm/            # LiteSVM program tests
+```
+
+### Vercel deployment
+
+Vercel uses the checked-in `vercel.json`: framework Vite, build command `npm run build:vercel`, output directory `dist-vercel`. Set the project Root Directory to the directory containing `package.json` and `vercel.json`, then deploy the latest source. Use Node.js 22.x.
+
+The default `npm run build` creates a Cloudflare Worker for Sites and must not be used as Vercel's static output. The separate Vercel build serves the same game directly in the browser, including `physics.wasm` and `idl.json`; it still uses the same deployed Solana program and MagicBlock ER. Invite query strings such as `/?room=...` are preserved. To inspect this build locally, run `npm run build:vercel` and `npx vite preview --config vite.vercel.config.ts --port 4174`.
+
+If an older Vercel deployment shows `404: NOT_FOUND`, redeploy after including these files and verify the project root. A deployment URL remains on its original build until a new deployment is created.
 
 ## Verification
 
@@ -94,4 +140,7 @@ The preview browser has no wallet extension; actual Phantom/Solflare signing and
 
 `npm run security` checks tracked and non-ignored source for common credential formats and verifies Git exclusions. `.env*`, deployment keypairs, generated target files, and `scripts/.wallets/` are ignored. The frontend contains public RPC addresses and a public program ID; these are not secrets. The scan found no embedded credentials in the current source. It is a pattern scan, not a comprehensive security audit.
 
-Useful references: [MagicBlock ER integration](https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/quickstart), [LiteSVM](https://github.com/LiteSVM/litesvm).
+## References
+
+- [MagicBlock ER integration](https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/quickstart)
+- [LiteSVM](https://github.com/LiteSVM/litesvm)
