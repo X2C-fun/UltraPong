@@ -920,7 +920,7 @@ export default function GameApp() {
                       ))}
                     </select>
                   </label>
-                  <label title="Reduce glow and ball trails">
+                  <label title="Reduce ball trails and motion effects">
                     <input
                       type="checkbox"
                       checked={reduced}
@@ -1375,14 +1375,21 @@ export default function GameApp() {
                       <div className="mode-label">YOU’RE OUT. GET EVEN.</div>
                       <p>Pick a hazard, then tap inside the arena.</p>
                       <div className="hazard-buttons">
-                        {['PEG', 'WELL', 'SPIN'].map((h, i) => (
+                        {[
+                          { label: 'PEG', icon: '⬡' },
+                          { label: 'GRAVITY WELL', icon: '◎' },
+                          { label: 'SPIN', icon: '╱' },
+                        ].map((h, i) => (
                           <button
-                            key={h}
-                            className={hazard === i ? 'selected' : ''}
+                            key={h.label}
+                            className={
+                              (hazard === i ? 'selected' : '') +
+                              (h.label.includes(' ') ? ' hazard-button-long' : '')
+                            }
                             onClick={() => setHazard(i)}
                           >
-                            <span>{['⬡', '◎', '╱'][i]}</span>
-                            {h}
+                            <span>{h.icon}</span>
+                            {h.label}
                           </button>
                         ))}
                       </div>

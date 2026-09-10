@@ -146,6 +146,7 @@ export default function Arena(props: Props) {
     window.addEventListener('keyup', keyUp);
     function draw(now: number) {
       const p = current.current;
+      const themed = p.theme !== 'default';
       const dt = Math.min(now - last, 100);
       last = now;
       acc += dt;
@@ -234,7 +235,7 @@ export default function Arena(props: Props) {
           };
           if (pl.hits > (lastPlayerHits[i] ?? pl.hits)) {
             hitFlash.set(i, now + 160);
-            if (!p.reduced) {
+            if (themed && !p.reduced) {
               paddleAnimationStart.set(i, now);
               paddleImages[i]?.forEach((image, frame) => {
                 if (!image.src) image.src = PADDLE_FRAMES[i]?.[frame] ?? '';
@@ -329,9 +330,6 @@ export default function Arena(props: Props) {
       ctx!.rotate(rotation);
       ctx!.scale(scale, scale);
       if (visualWalls.length) {
-        ctx!.save();
-        ctx!.shadowColor = '#07122f';
-        ctx!.shadowBlur = p.reduced ? 0 : 28;
         ctx!.beginPath();
         ctx!.moveTo(visualWalls[0].a.x, visualWalls[0].a.y);
         visualWalls.forEach((w) => ctx!.lineTo(w.b.x, w.b.y));
@@ -342,63 +340,64 @@ export default function Arena(props: Props) {
         gradient.addColorStop(1, theme.table[1]);
         ctx!.fillStyle = gradient;
         ctx!.fill();
-        ctx!.restore();
 
-        ctx!.save();
-        ctx!.strokeStyle = theme.line + '70';
-        ctx!.lineWidth = 380;
-        ctx!.setLineDash([2600, 2100]);
-        ctx!.beginPath();
-        for (const w of visualWalls) {
-          const mx = (w.a.x + w.b.x) / 2;
-          const my = (w.a.y + w.b.y) / 2;
-          ctx!.moveTo(0, 0);
-          ctx!.lineTo(mx, my);
+        if (themed) {
+          ctx!.save();
+          ctx!.strokeStyle = theme.line + '70';
+          ctx!.lineWidth = 380;
+          ctx!.setLineDash([2600, 2100]);
+          ctx!.beginPath();
+          for (const w of visualWalls) {
+            const mx = (w.a.x + w.b.x) / 2;
+            const my = (w.a.y + w.b.y) / 2;
+            ctx!.moveTo(0, 0);
+            ctx!.lineTo(mx, my);
+          }
+          ctx!.stroke();
+          ctx!.setLineDash([]);
+          ctx!.beginPath();
+          visualWalls.forEach((w, index) => {
+            const x = ((w.a.x + w.b.x) / 2) * 0.38;
+            const y = ((w.a.y + w.b.y) / 2) * 0.38;
+            if (index) ctx!.lineTo(x, y);
+            else ctx!.moveTo(x, y);
+          });
+          ctx!.closePath();
+          ctx!.stroke();
+          ctx!.fillStyle = theme.line + '30';
+          const starPositions = [
+            [-0.48, -0.2],
+            [0.47, -0.18],
+            [-0.34, 0.34],
+            [0.32, 0.39],
+            [-0.2, -0.5],
+            [0.21, -0.49],
+            [0, 0.58],
+          ];
+          for (const [x, y] of starPositions)
+            star(ctx!, x * 100000, y * 100000, 4300);
+          ctx!.restore();
+
+          ctx!.save();
+          ctx!.globalAlpha = 0.13;
+          ctx!.fillStyle = '#a7c0ff';
+          ctx!.beginPath();
+          ctx!.roundRect(-15000, -10500, 30000, 23000, 8000);
+          ctx!.fill();
+          ctx!.beginPath();
+          ctx!.moveTo(-12000, -7000);
+          ctx!.lineTo(-7000, -17000);
+          ctx!.lineTo(-1500, -9000);
+          ctx!.lineTo(6500, -17000);
+          ctx!.lineTo(12000, -7000);
+          ctx!.fill();
+          ctx!.fillStyle = theme.table[1];
+          ctx!.beginPath();
+          ctx!.arc(-5200, 0, 2300, 0, Math.PI * 2);
+          ctx!.arc(5200, 0, 2300, 0, Math.PI * 2);
+          ctx!.fill();
+          ctx!.restore();
         }
-        ctx!.stroke();
-        ctx!.setLineDash([]);
-        ctx!.beginPath();
-        visualWalls.forEach((w, index) => {
-          const x = ((w.a.x + w.b.x) / 2) * 0.38;
-          const y = ((w.a.y + w.b.y) / 2) * 0.38;
-          if (index) ctx!.lineTo(x, y);
-          else ctx!.moveTo(x, y);
-        });
-        ctx!.closePath();
-        ctx!.stroke();
-        ctx!.fillStyle = theme.line + '30';
-        const starPositions = [
-          [-0.48, -0.2],
-          [0.47, -0.18],
-          [-0.34, 0.34],
-          [0.32, 0.39],
-          [-0.2, -0.5],
-          [0.21, -0.49],
-          [0, 0.58],
-        ];
-        for (const [x, y] of starPositions) star(ctx!, x * 100000, y * 100000, 4300);
-        ctx!.restore();
-
-        // A subtle coded mascot mark echoes the reference without baking it into the table.
-        ctx!.save();
-        ctx!.globalAlpha = 0.13;
-        ctx!.fillStyle = '#a7c0ff';
-        ctx!.beginPath();
-        ctx!.roundRect(-15000, -10500, 30000, 23000, 8000);
-        ctx!.fill();
-        ctx!.beginPath();
-        ctx!.moveTo(-12000, -7000);
-        ctx!.lineTo(-7000, -17000);
-        ctx!.lineTo(-1500, -9000);
-        ctx!.lineTo(6500, -17000);
-        ctx!.lineTo(12000, -7000);
-        ctx!.fill();
-        ctx!.fillStyle = theme.table[1];
-        ctx!.beginPath();
-        ctx!.arc(-5200, 0, 2300, 0, Math.PI * 2);
-        ctx!.arc(5200, 0, 2300, 0, Math.PI * 2);
-        ctx!.fill();
-        ctx!.restore();
       }
       if (game.tick !== lastTick) {
         game.balls.forEach((b, i) => {
@@ -410,10 +409,8 @@ export default function Arena(props: Props) {
       }
       for (const w of visualWalls) {
         const color = w.player < 0 ? '#526075' : COLORS[w.player];
-        ctx!.lineWidth = w.player < 0 ? 650 : 900;
-        ctx!.strokeStyle = w.player < 0 ? color + '77' : color;
-        ctx!.shadowColor = color;
-        ctx!.shadowBlur = p.reduced || w.player < 0 ? 0 : 13;
+        ctx!.lineWidth = themed && w.player >= 0 ? 900 : 500;
+        ctx!.strokeStyle = themed && w.player >= 0 ? color : color + '77';
         ctx!.setLineDash(
           w.player >= 0 && game.players[w.player].lives === 1
             ? [3200, 2600]
@@ -423,7 +420,6 @@ export default function Arena(props: Props) {
         ctx!.moveTo(w.a.x, w.a.y);
         ctx!.lineTo(w.b.x, w.b.y);
         ctx!.stroke();
-        ctx!.shadowBlur = 0;
         ctx!.setLineDash([]);
         if (w.player < 0) continue;
         const pl = game.players[w.player];
@@ -434,107 +430,137 @@ export default function Arena(props: Props) {
           y1 = w.a.y + (w.b.y - w.a.y) * (t - half);
         const x2 = w.a.x + (w.b.x - w.a.x) * (t + half),
           y2 = w.a.y + (w.b.y - w.a.y) * (t + half);
-        const animationAge = now - (paddleAnimationStart.get(w.player) ?? -1000);
-        const frames = paddleImages[w.player] ?? [];
-        const frameIndex =
-          !p.reduced && animationAge >= 0 && animationAge < 405
-            ? Math.min(frames.length - 1, Math.floor(animationAge / 45))
-            : 0;
-        const requestedImage = frames[frameIndex];
-        const image =
-          requestedImage?.complete && requestedImage.naturalWidth
-            ? requestedImage
-            : frames[0];
-        if (image?.complete && image.naturalWidth) {
-          const paddleLength = Math.hypot(x2 - x1, y2 - y1) * 1.16;
-          const paddleX = (x1 + x2) / 2;
-          const paddleY = (y1 + y2) / 2;
+        if (themed) {
+          const animationAge =
+            now - (paddleAnimationStart.get(w.player) ?? -1000);
+          const frames = paddleImages[w.player] ?? [];
+          const frameIndex =
+            !p.reduced && animationAge >= 0 && animationAge < 405
+              ? Math.min(frames.length - 1, Math.floor(animationAge / 45))
+              : 0;
+          const requestedImage = frames[frameIndex];
+          const image =
+            requestedImage?.complete && requestedImage.naturalWidth
+              ? requestedImage
+              : frames[0];
+          if (image?.complete && image.naturalWidth) {
+            const paddleLength = Math.hypot(x2 - x1, y2 - y1) * 1.16;
+            const paddleX = (x1 + x2) / 2;
+            const paddleY = (y1 + y2) / 2;
+            ctx!.save();
+            ctx!.translate(paddleX, paddleY);
+            ctx!.rotate(Math.atan2(y2 - y1, x2 - x1));
+            ctx!.drawImage(
+              image,
+              -paddleLength / 2,
+              -paddleLength / 2,
+              paddleLength,
+              paddleLength,
+            );
+            ctx!.restore();
+          } else {
+            ctx!.strokeStyle =
+              (hitFlash.get(w.player) ?? 0) > now ? '#ffffff' : color;
+            ctx!.lineWidth = (hitFlash.get(w.player) ?? 0) > now ? 2800 : 2000;
+            ctx!.lineCap = 'round';
+            ctx!.beginPath();
+            ctx!.moveTo(x1, y1);
+            ctx!.lineTo(x2, y2);
+            ctx!.stroke();
+          }
+
+          const mx = ((w.a.x + w.b.x) / 2) * 1.34;
+          const my = ((w.a.y + w.b.y) / 2) * 1.34;
           ctx!.save();
-          ctx!.translate(paddleX, paddleY);
-          ctx!.rotate(Math.atan2(y2 - y1, x2 - x1));
-          ctx!.shadowColor =
-            (hitFlash.get(w.player) ?? 0) > now ? '#fff' : color;
-          ctx!.shadowBlur = p.reduced ? 0 : 16;
-          ctx!.drawImage(
-            image,
-            -paddleLength / 2,
-            -paddleLength / 2,
-            paddleLength,
-            paddleLength,
+          ctx!.translate(mx, my);
+          ctx!.rotate(-rotation);
+          ctx!.scale(1 / scale, 1 / scale);
+          const cardWidth = 104;
+          const cardHeight = 38;
+          ctx!.fillStyle = '#152657e8';
+          ctx!.strokeStyle = color + '80';
+          ctx!.lineWidth = 1;
+          ctx!.beginPath();
+          ctx!.roundRect(
+            -cardWidth / 2,
+            -cardHeight / 2,
+            cardWidth,
+            cardHeight,
+            11,
           );
+          ctx!.fill();
+          ctx!.stroke();
+          ctx!.fillStyle = color;
+          ctx!.beginPath();
+          ctx!.arc(-37, 0, 10, 0, Math.PI * 2);
+          ctx!.fill();
+          ctx!.fillStyle = '#10204c';
+          ctx!.font = 'bold 9px Arial';
+          ctx!.textAlign = 'center';
+          ctx!.textBaseline = 'middle';
+          ctx!.fillText('P' + (w.player + 1), -37, 0);
+          ctx!.textAlign = 'left';
+          ctx!.fillStyle = '#f5f7ff';
+          ctx!.font = 'bold 9px Arial';
+          ctx!.fillText(
+            (
+              p.names[w.player] ||
+              'BOT ' + String(w.player + 1).padStart(2, '0')
+            ).slice(0, 9),
+            -22,
+            -6,
+          );
+          ctx!.fillStyle = '#ff6f8f';
+          ctx!.font = '12px Arial';
+          ctx!.fillText(
+            '♥'.repeat(pl.lives) + '♡'.repeat(2 - pl.lives),
+            -22,
+            8,
+          );
+          if (w.player === p.localPlayer) {
+            ctx!.fillStyle = color;
+            ctx!.font = 'bold 7px Arial';
+            ctx!.textAlign = 'right';
+            ctx!.fillText('YOU', 45, -6);
+          }
           ctx!.restore();
         } else {
           ctx!.strokeStyle =
             (hitFlash.get(w.player) ?? 0) > now ? '#ffffff' : color;
           ctx!.lineWidth = (hitFlash.get(w.player) ?? 0) > now ? 2800 : 2000;
           ctx!.lineCap = 'round';
-          ctx!.shadowColor = color;
-          ctx!.shadowBlur = p.reduced ? 0 : 10;
           ctx!.beginPath();
           ctx!.moveTo(x1, y1);
           ctx!.lineTo(x2, y2);
           ctx!.stroke();
-          ctx!.shadowBlur = 0;
-        }
 
-        const mx = ((w.a.x + w.b.x) / 2) * 1.34;
-        const my = ((w.a.y + w.b.y) / 2) * 1.34;
-        ctx!.save();
-        ctx!.translate(mx, my);
-        ctx!.rotate(-rotation);
-        ctx!.scale(1 / scale, 1 / scale);
-        const cardWidth = 104;
-        const cardHeight = 38;
-        ctx!.fillStyle = '#152657e8';
-        ctx!.strokeStyle = color + '80';
-        ctx!.lineWidth = 1;
-        ctx!.shadowColor = '#07122faa';
-        ctx!.shadowBlur = 12;
-        ctx!.beginPath();
-        ctx!.roundRect(
-          -cardWidth / 2,
-          -cardHeight / 2,
-          cardWidth,
-          cardHeight,
-          11,
-        );
-        ctx!.fill();
-        ctx!.stroke();
-        ctx!.shadowBlur = 0;
-        ctx!.fillStyle = color;
-        ctx!.beginPath();
-        ctx!.arc(-37, 0, 10, 0, Math.PI * 2);
-        ctx!.fill();
-        ctx!.fillStyle = '#10204c';
-        ctx!.font = 'bold 9px Arial';
-        ctx!.textAlign = 'center';
-        ctx!.textBaseline = 'middle';
-        ctx!.fillText('P' + (w.player + 1), -37, 0);
-        ctx!.textAlign = 'left';
-        ctx!.fillStyle = '#f5f7ff';
-        ctx!.font = 'bold 9px Arial';
-        ctx!.fillText(
-          (p.names[w.player] || 'BOT ' + String(w.player + 1).padStart(2, '0')).slice(
-            0,
-            9,
-          ),
-          -22,
-          -6,
-        );
-        ctx!.fillStyle = '#ff6f8f';
-        ctx!.font = '12px Arial';
-        ctx!.fillText(
-          '♥'.repeat(pl.lives) + '♡'.repeat(2 - pl.lives),
-          -22,
-          8,
-        );
-        if (w.player === p.localPlayer) {
+          const mx = (w.a.x + w.b.x) * 0.56;
+          const my = (w.a.y + w.b.y) * 0.56;
+          ctx!.save();
+          ctx!.translate(mx, my);
+          ctx!.rotate(-rotation);
+          ctx!.textAlign = 'center';
+          ctx!.font = 11 / scale + 'px monospace';
           ctx!.fillStyle = color;
-          ctx!.font = 'bold 7px Arial';
-          ctx!.textAlign = 'right';
-          ctx!.fillText('YOU', 45, -6);
+          ctx!.fillText(
+            (
+              p.names[w.player] ||
+              'BOT ' + String(w.player + 1).padStart(2, '0')
+            ).slice(0, 16),
+            0,
+            0,
+          );
+          ctx!.font = 10 / scale + 'px monospace';
+          ctx!.fillText(
+            '◆'.repeat(pl.lives) + '◇'.repeat(2 - pl.lives),
+            0,
+            14 / scale,
+          );
+          if (w.player === p.localPlayer) {
+            ctx!.fillText('▲ YOU', 0, 28 / scale);
+          }
+          ctx!.restore();
         }
-        ctx!.restore();
       }
       for (const h of game.hazards) {
         const color = COLORS[h.owner] ?? '#ffb45c';
@@ -596,13 +622,10 @@ export default function Arena(props: Props) {
         ctx!.fillStyle = '#101c2b';
         ctx!.strokeStyle = color;
         ctx!.lineWidth = 1.5;
-        ctx!.shadowColor = color;
-        ctx!.shadowBlur = p.reduced ? 0 : 14;
         ctx!.beginPath();
         ctx!.roundRect(-12, -12, 24, 24, 5);
         ctx!.fill();
         ctx!.stroke();
-        ctx!.shadowBlur = 0;
         ctx!.fillStyle = color;
         ctx!.lineWidth = 1.8;
         ctx!.beginPath();
@@ -684,22 +707,10 @@ export default function Arena(props: Props) {
         const f =
           !p.online && p.running && !game.pause && !b.wait ? acc / 50 : 0;
         const { x: bx, y: by } = ballVisualPosition(b, walls, f);
-        const glow = ctx!.createRadialGradient(bx, by, 0, bx, by, 5600);
-        glow.addColorStop(0, '#ffffff');
-        glow.addColorStop(0.24, '#fff9c9');
-        glow.addColorStop(0.5, color + '99');
-        glow.addColorStop(1, color + '00');
-        ctx!.fillStyle = glow;
+        ctx!.fillStyle = '#fff';
         ctx!.beginPath();
-        ctx!.arc(bx, by, 5600, 0, Math.PI * 2);
+        ctx!.arc(bx, by, 2250, 0, Math.PI * 2);
         ctx!.fill();
-        ctx!.fillStyle = '#fffdf1';
-        ctx!.shadowColor = color;
-        ctx!.shadowBlur = p.reduced ? 0 : 26;
-        ctx!.beginPath();
-        ctx!.arc(bx, by, 1800, 0, Math.PI * 2);
-        ctx!.fill();
-        ctx!.shadowBlur = 0;
       });
       if (
         pointer.current &&

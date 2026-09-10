@@ -880,6 +880,10 @@ h1 > span {
   color: var(--lime);
   background: #202e1b;
 }
+.hazard-buttons button.hazard-button-long {
+  font-size: 9px;
+  line-height: 1.25;
+}
 .cooldown {
   height: 3px;
   background: #263040;
