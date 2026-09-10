@@ -27,6 +27,7 @@ type Props = {
   onInput: (n: number) => void;
   onPlace: (p: Vec) => void;
   snapshotTime?: number;
+  preview?: boolean;
 };
 
 function star(
@@ -265,7 +266,8 @@ export default function Arena(props: Props) {
         }
         lastEventTick = game.event_tick;
       }
-      const scale = Math.min(width, height) / 275000;
+      const scale =
+        Math.min(width, height) / (p.preview ? 325000 : 275000);
       frameTransform.current = {
         scale,
         cx: width / 2,

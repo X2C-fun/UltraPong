@@ -36,6 +36,7 @@ import Arena from '@/components/arena';
 import NetworkActivity from '@/components/network-activity';
 import { ensureCommitted, isTerminalRace } from '@/lib/settlement';
 import { hazardPlacementMessage } from '@/lib/hazard-placement';
+import HomePreview from '@/components/home-preview';
 import { Physics, COLORS, type Snapshot, type Vec } from '@/lib/physics';
 import { THEMES, themeById, type ThemeId } from '@/lib/themes';
 import * as chain from '@/lib/chain';
@@ -740,14 +741,39 @@ export default function GameApp() {
       )}
       {screen === 'home' ? (
         <section className="home-screen" aria-labelledby="home-title">
-          <h1 id="home-title">
-            Last wall
-            <br />
-            <span>standing.</span>
-          </h1>
-          <p className="home-description">
-            Defend your wall. Outlast your rivals.
-          </p>
+          <div className="home-hero">
+            <div className="home-hero-copy">
+              <p className="eyebrow">SURVIVAL PONG · SOLANA DEVNET</p>
+              <h1 id="home-title">
+                Last wall
+                <br />
+                <span>standing.</span>
+              </h1>
+              <p className="home-description">
+                Eight walls. Two lives. One survivor. Defend your side of the
+                arena, outlast everyone else, and claim the round.
+              </p>
+              <ul className="home-features">
+                <li>
+                  <Users size={16} />
+                  8-player octagon arena
+                </li>
+                <li>
+                  <Palette size={16} />
+                  4 themed battlegrounds
+                </li>
+                <li>
+                  <Zap size={16} />
+                  Sabotage hazards after elimination
+                </li>
+                <li>
+                  <Trophy size={16} />
+                  Devnet winner-takes-all rooms
+                </li>
+              </ul>
+            </div>
+            <HomePreview muted={muted} reduced={reduced} />
+          </div>
           {online ? (
             <div className="home-resume">
               <h2>Your room is still open</h2>
@@ -767,45 +793,47 @@ export default function GameApp() {
               </button>
             </div>
           ) : (
-            <div className="home-modes">
-              <button disabled={!engine} onClick={practice}>
-                <Zap size={25} />
-                <strong>Warm up</strong>
-                <span>
-                  You and seven bots. <br />
-                  No wallet needed.
-                </span>
-                <ArrowUpRight className="mode-arrow" size={19} />
-              </button>
-              <button
-                onClick={() => {
-                  chooseMode('free');
-                  setScreen('arena');
-                }}
-              >
-                <Users size={25} />
-                <strong>Play with friends</strong>
-                <span>
-                  Host or join a room. <br />
-                  No wager. Setup fees apply.
-                </span>
-                <ArrowUpRight className="mode-arrow" size={19} />
-              </button>
-              <button
-                onClick={() => {
-                  chooseMode('wager');
-                  setScreen('arena');
-                }}
-              >
-                <Trophy size={25} />
-                <strong>Winner takes all</strong>
-                <span>
-                  0.01 Devnet SOL per player. <br />
-                  Last survivor takes the pot.
-                </span>
-                <ArrowUpRight className="mode-arrow" size={19} />
-              </button>
-            </div>
+            <>
+              <div className="home-modes">
+                <button disabled={!engine} onClick={practice}>
+                  <Zap size={25} />
+                  <strong>Warm up</strong>
+                  <span>
+                    You and seven bots. <br />
+                    No wallet needed.
+                  </span>
+                  <ArrowUpRight className="mode-arrow" size={19} />
+                </button>
+                <button
+                  onClick={() => {
+                    chooseMode('free');
+                    setScreen('arena');
+                  }}
+                >
+                  <Users size={25} />
+                  <strong>Play with friends</strong>
+                  <span>
+                    Host or join a room. <br />
+                    No wager. Setup fees apply.
+                  </span>
+                  <ArrowUpRight className="mode-arrow" size={19} />
+                </button>
+                <button
+                  onClick={() => {
+                    chooseMode('wager');
+                    setScreen('arena');
+                  }}
+                >
+                  <Trophy size={25} />
+                  <strong>Winner takes all</strong>
+                  <span>
+                    0.01 Devnet SOL per player. <br />
+                    Last survivor takes the pot.
+                  </span>
+                  <ArrowUpRight className="mode-arrow" size={19} />
+                </button>
+              </div>
+            </>
           )}
           {error && (
             <p className="error-message" role="alert">
