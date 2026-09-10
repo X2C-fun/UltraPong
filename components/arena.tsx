@@ -341,43 +341,36 @@ export default function Arena(props: Props) {
         ctx!.fillStyle = gradient;
         ctx!.fill();
 
-        if (themed) {
-          ctx!.save();
-          ctx!.strokeStyle = theme.line + '70';
-          ctx!.lineWidth = 380;
-          ctx!.setLineDash([2600, 2100]);
-          ctx!.beginPath();
-          for (const w of visualWalls) {
-            const mx = (w.a.x + w.b.x) / 2;
-            const my = (w.a.y + w.b.y) / 2;
-            ctx!.moveTo(0, 0);
-            ctx!.lineTo(mx, my);
-          }
-          ctx!.stroke();
-          ctx!.setLineDash([]);
-          ctx!.beginPath();
-          visualWalls.forEach((w, index) => {
-            const x = ((w.a.x + w.b.x) / 2) * 0.38;
-            const y = ((w.a.y + w.b.y) / 2) * 0.38;
-            if (index) ctx!.lineTo(x, y);
-            else ctx!.moveTo(x, y);
-          });
-          ctx!.closePath();
-          ctx!.stroke();
-          ctx!.fillStyle = theme.line + '30';
-          const starPositions = [
-            [-0.48, -0.2],
-            [0.47, -0.18],
-            [-0.34, 0.34],
-            [0.32, 0.39],
-            [-0.2, -0.5],
-            [0.21, -0.49],
-            [0, 0.58],
-          ];
-          for (const [x, y] of starPositions)
-            star(ctx!, x * 100000, y * 100000, 4300);
-          ctx!.restore();
+        ctx!.save();
+        ctx!.strokeStyle = theme.line + '70';
+        ctx!.lineWidth = 380;
+        ctx!.setLineDash([2600, 2100]);
+        ctx!.beginPath();
+        for (const w of visualWalls) {
+          ctx!.moveTo(0, 0);
+          ctx!.lineTo(w.a.x, w.a.y);
+        }
+        ctx!.stroke();
+        ctx!.setLineDash([]);
+        ctx!.beginPath();
+        visualWalls.forEach((w, index) => {
+          const x = w.a.x * 0.38;
+          const y = w.a.y * 0.38;
+          if (index) ctx!.lineTo(x, y);
+          else ctx!.moveTo(x, y);
+        });
+        ctx!.closePath();
+        ctx!.stroke();
+        ctx!.fillStyle = theme.line + '30';
+        for (const w of visualWalls) {
+          if (w.player < 0) continue;
+          const sx = (w.a.x + w.b.x) / 3;
+          const sy = (w.a.y + w.b.y) / 3;
+          star(ctx!, sx, sy, 4300);
+        }
+        ctx!.restore();
 
+        if (themed) {
           ctx!.save();
           ctx!.globalAlpha = 0.13;
           ctx!.fillStyle = '#a7c0ff';

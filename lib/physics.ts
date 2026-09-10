@@ -106,6 +106,7 @@ type Exports = {
   game_step: () => void;
   game_input: (p: number, t: number) => void;
   game_place: (p: number, k: number, x: number, y: number) => number;
+  game_placement: (p: number, k: number, x: number, y: number) => number;
   game_snapshot: () => number;
   game_snapshot_len: () => number;
   game_load_buffer: (n: number) => number;
@@ -147,6 +148,14 @@ export class Physics {
   input(player: number, target: number) {
     this.cached = undefined;
     this.e.game_input(player, Math.round(target));
+  }
+  placement(player: number, kind: number, p: Vec) {
+    return this.e.game_placement(
+      player,
+      kind,
+      Math.round(p.x),
+      Math.round(p.y),
+    );
   }
   place(player: number, kind: number, p: Vec) {
     this.cached = undefined;

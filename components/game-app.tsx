@@ -34,6 +34,7 @@ import type { Wallet } from '@wallet-standard/base';
 import Arena from '@/components/arena';
 import NetworkActivity from '@/components/network-activity';
 import { ensureCommitted, isTerminalRace } from '@/lib/settlement';
+import { hazardPlacementMessage } from '@/lib/hazard-placement';
 import { Physics, COLORS, type Snapshot, type Vec } from '@/lib/physics';
 import { THEMES, themeById, type ThemeId } from '@/lib/themes';
 import * as chain from '@/lib/chain';
@@ -562,15 +563,25 @@ export default function GameApp() {
     setSettlement('');
     if (engine) setSnap(engine.init(8, 8429, 255));
   }
+  function validateHazardPlacement(p: Vec) {
+    if (!engine || localPlayer < 0) return 2;
+    return engine.placement(localPlayer, hazard, p);
+  }
   async function drop(p: Vec) {
     if (!engine || localPlayer < 0) return;
+    const code = validateHazardPlacement(p);
+    if (code !== 0) {
+      setNotice(hazardPlacementMessage(code));
+      return;
+    }
     if (!online) {
       const ok = engine.place(localPlayer, hazard, p);
-      if (!ok)
-        setNotice(
-          'Placement refused: keep clear of walls and hazards, and wait for your cooldown.',
-        );
-      else setNotice('');
+      if (!ok) {
+        setNotice(hazardPlacementMessage(8));
+        return;
+      }
+      setNotice('');
+      setSnap(engine.snapshot());
       return;
     }
     if (!roomId || !room || !session.current) return;
@@ -591,10 +602,9 @@ export default function GameApp() {
         ),
       ]);
       setNotice('');
+      setSnap(engine.snapshot());
     } catch {
-      setNotice(
-        'Placement refused: keep clear of walls and hazards, and wait for your cooldown.',
-      );
+      setNotice(hazardPlacementMessage(8));
     }
   }
   const onInput = useCallback(
@@ -674,12 +684,9 @@ export default function GameApp() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
   const showArena = running || (online && !!match && room?.state !== 0);
+  const showHazardDock = out && sabotage && !finished && !!snap && localPlayer >= 0;
   const showSide =
-    online ||
-    !showArena ||
-    (out && sabotage && !finished) ||
-    !!error ||
-    !!notice;
+    online || !showArena || !!error || (!!notice && !showHazardDock);
   return (
     <main className="shell">
       <header className="topbar">
@@ -897,6 +904,62 @@ export default function GameApp() {
                   SIDES
                 </div>
               </div>
+              {showHazardDock && (
+                <div className="hazard-panel arena-hazard-dock">
+                  <div className="arena-hazard-copy">
+                    <div className="mode-label">YOU’RE OUT. GET EVEN.</div>
+                    <p>Pick a hazard, then tap inside the arena.</p>
+                  </div>
+                  <div className="hazard-buttons">
+                    {[
+                      { label: 'PEG', icon: '⬡' },
+                      { label: 'GRAVITY WELL', icon: '◎' },
+                      { label: 'SPIN', icon: '╱' },
+                    ].map((h, i) => (
+                      <button
+                        key={h.label}
+                        className={
+                          (hazard === i ? 'selected' : '') +
+                          (h.label.includes(' ') ? ' hazard-button-long' : '')
+                        }
+                        onClick={() => setHazard(i)}
+                      >
+                        <span>{h.icon}</span>
+                        {h.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="arena-hazard-status">
+                    <div className="cooldown">
+                      <span
+                        style={{
+                          width:
+                            100 -
+                            Math.max(
+                              0,
+                              (snap.game.players[localPlayer].cooldown -
+                                snap.game.tick) /
+                                160,
+                            ) *
+                              100 +
+                            '%',
+                        }}
+                      />
+                    </div>
+                    <small>
+                      {snap.game.players[localPlayer].cooldown > snap.game.tick
+                        ? 'Cooling down…'
+                        : 'Ready to place'}{' '}
+                      · Clears at the next elimination
+                    </small>
+                  </div>
+                  {notice && (
+                    <output className="notice arena-hazard-notice">
+                      {notice}
+                    </output>
+                  )}
+                </div>
+              )}
               <div className="arena-footer">
                 <span>
                   <span className="keycap">↔</span> Mouse · A/D · Arrows{' '}
@@ -1370,54 +1433,6 @@ export default function GameApp() {
               )}
               {(running || online) && (
                 <>
-                  {out && sabotage && !finished && (
-                    <div className="hazard-panel">
-                      <div className="mode-label">YOU’RE OUT. GET EVEN.</div>
-                      <p>Pick a hazard, then tap inside the arena.</p>
-                      <div className="hazard-buttons">
-                        {[
-                          { label: 'PEG', icon: '⬡' },
-                          { label: 'GRAVITY WELL', icon: '◎' },
-                          { label: 'SPIN', icon: '╱' },
-                        ].map((h, i) => (
-                          <button
-                            key={h.label}
-                            className={
-                              (hazard === i ? 'selected' : '') +
-                              (h.label.includes(' ') ? ' hazard-button-long' : '')
-                            }
-                            onClick={() => setHazard(i)}
-                          >
-                            <span>{h.icon}</span>
-                            {h.label}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="cooldown">
-                        <span
-                          style={{
-                            width:
-                              100 -
-                              Math.max(
-                                0,
-                                (snap!.game.players[localPlayer].cooldown -
-                                  snap!.game.tick) /
-                                  160,
-                              ) *
-                                100 +
-                              '%',
-                          }}
-                        />
-                      </div>
-                      <small>
-                        {snap &&
-                        snap.game.players[localPlayer].cooldown > snap.game.tick
-                          ? 'Cooling down…'
-                          : 'Ready to place'}{' '}
-                        · Clears at the next elimination
-                      </small>
-                    </div>
-                  )}
                   {online && !(room?.state === 0 && localPlayer >= 0) && (
                     <button className="text-button leave" onClick={leave}>
                       <LogOut size={14} />
@@ -1437,7 +1452,9 @@ export default function GameApp() {
                   </button>
                 </div>
               )}
-              {notice && <output className="notice">{notice}</output>}
+              {notice && !showHazardDock && (
+                <output className="notice">{notice}</output>
+              )}
             </aside>
           )}
           {online && (

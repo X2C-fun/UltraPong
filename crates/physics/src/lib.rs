@@ -265,6 +265,14 @@ impl Game {
             wait: 10,
         };
     }
+    fn hazard_clearance(kind: u8) -> i64 {
+        match kind {
+            0 => 9_000,
+            1 => 16_000,
+            2 => 12_000,
+            _ => 9_000,
+        }
+    }
     pub fn placement(&self, owner: usize, kind: u8, p: V) -> Result<(), &'static str> {
         if self.finished || !self.sabotage {
             return Err("Hazards are disabled");
@@ -279,24 +287,34 @@ impl Game {
             return Err("Place inside the arena");
         }
         for w in self.walls() {
-            if p.sub(w.a).dot(w.n) / Q < 22_000 {
+            if p.sub(w.a).dot(w.n) / Q < 20_000 {
                 return Err("Too close to a living wall");
             }
         }
-        if self.hazards.len() >= 12
-            || self
-                .hazards
-                .iter()
-                .filter(|h| h.owner as usize == owner)
-                .count()
-                >= 2
-        {
+        if self.hazards.len() >= 12 {
             return Err("Hazard limit reached");
         }
-        if self.hazards.iter().any(|h| h.p.sub(p).len() < 23_000) {
+        let clearance = Self::hazard_clearance(kind);
+        if self.hazards.iter().any(|h| {
+            h.p.sub(p).len()
+                < clearance + Self::hazard_clearance(h.kind)
+        }) {
             return Err("Too close to another hazard");
         }
         Ok(())
+    }
+    pub fn placement_code(&self, owner: usize, kind: u8, p: V) -> u8 {
+        match self.placement(owner, kind, p) {
+            Ok(()) => 0,
+            Err("Hazards are disabled") => 1,
+            Err("Only eliminated players can sabotage") => 2,
+            Err("Hazard is cooling down") => 3,
+            Err("Place inside the arena") => 4,
+            Err("Too close to a living wall") => 5,
+            Err("Hazard limit reached") => 6,
+            Err("Too close to another hazard") => 7,
+            Err(_) => 8,
+        }
     }
     pub fn place(&mut self, owner: usize, kind: u8, p: V) -> Result<(), &'static str> {
         self.placement(owner, kind, p)?;
@@ -597,6 +615,13 @@ mod wasm {
         })
     }
     #[no_mangle]
+    pub extern "C" fn game_placement(p: u32, kind: u32, x: i32, y: i32) -> u32 {
+        GAME.with(|g| {
+            g.borrow()
+                .placement_code(p as usize, kind as u8, V::new(x as i64, y as i64)) as u32
+        })
+    }
+    #[no_mangle]
     pub extern "C" fn game_snapshot() -> *const u8 {
         GAME.with(|g| {
             let game = g.borrow();
@@ -811,6 +836,9 @@ mod tests {
         assert!(g.finished);
         assert_eq!(g.winner, 0);
     }
+    fn segment_center(w: &Wall) -> V {
+        V::new((w.a.x + w.b.x) / 3, (w.a.y + w.b.y) / 3)
+    }
     #[test]
     fn hazards() {
         let mut g = Game::new(8, 1, 0, true);
@@ -821,6 +849,34 @@ mod tests {
         assert!(g.place(0, 1, V::default()).is_err());
         g.tick = 161;
         assert!(g.place(0, 1, V::default()).is_err());
+    }
+    #[test]
+    fn second_hazard_in_adjacent_segment() {
+        let mut g = Game::new(8, 1, 0, true);
+        g.eliminate(0);
+        let walls = g.walls();
+        let first = segment_center(&walls[0]);
+        assert!(g.place(0, 1, first).is_ok());
+        g.tick += 160;
+        let second = segment_center(&walls[1]);
+        assert!(
+            g.place(0, 0, second).is_ok(),
+            "adjacent segment centers should allow a second hazard"
+        );
+    }
+    #[test]
+    fn third_hazard_by_same_player() {
+        let mut g = Game::new(8, 1, 0, true);
+        g.eliminate(0);
+        let walls = g.walls();
+        assert!(g.place(0, 0, segment_center(&walls[0])).is_ok());
+        g.tick += 160;
+        assert!(g.place(0, 1, segment_center(&walls[2])).is_ok());
+        g.tick += 160;
+        assert!(
+            g.place(0, 2, segment_center(&walls[4])).is_ok(),
+            "eliminated players are not capped at two hazards"
+        );
     }
     #[test]
     fn bounded_inputs() {
